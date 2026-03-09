@@ -214,6 +214,152 @@
       white-space: pre-wrap;
       word-break: break-all;
     }
+
+    /* ══ Checklist Panel ════════════════════════════════════════════════════════ */
+    #checklist { margin-bottom: 24px; }
+
+    .cl-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .cl-project-select {
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      min-width: 280px;
+      max-width: 480px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .cl-project-select:focus { outline: none; border-color: #388bfd; }
+
+    .cl-tasks-wrap { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Stage group */
+    .cl-stage-group {
+      border: 1px solid #30363d;
+      border-radius: 7px;
+      overflow: hidden;
+      background: #161b22;
+    }
+    .cl-stage-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+    }
+    .cl-stage-chip {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: 1px solid;
+      letter-spacing: 0.02em;
+    }
+
+    /* Task rows */
+    .cl-task-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #21262d;
+      transition: background .1s;
+    }
+    .cl-task-row:last-child { border-bottom: none; }
+    .cl-task-row:hover { background: #1c2128; }
+
+    /* Urgency highlight — applied to the row bg */
+    .cl-task-row.cl-overdue  { background: rgba(248, 81, 73, 0.08); }
+    .cl-task-row.cl-due-soon { background: rgba(210, 153, 34, 0.08); }
+    .cl-task-row.cl-overdue:hover  { background: rgba(248, 81, 73, 0.14); }
+    .cl-task-row.cl-due-soon:hover { background: rgba(210, 153, 34, 0.14); }
+
+    /* Ticked row */
+    .cl-task-row.cl-ticked { opacity: 0.45; }
+
+    /* Custom checkbox */
+    .cl-checkbox-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .cl-checkbox-wrap input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #3fb950;
+      cursor: pointer;
+    }
+
+    /* Task label */
+    .cl-task-label {
+      font-size: 0.84rem;
+      color: #c9d1d9;
+      line-height: 1.3;
+    }
+    .cl-task-label.cl-ticked-text {
+      text-decoration: line-through;
+      color: #8b949e;
+    }
+
+    /* Stage chip (small, in row) */
+    .cl-stage-chip-sm {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.67rem;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Due date */
+    .cl-due-date {
+      font-size: 0.78rem;
+      color: #8b949e;
+      white-space: nowrap;
+      min-width: 80px;
+      text-align: right;
+    }
+    .cl-task-row.cl-overdue  .cl-due-date { color: #f85149; font-weight: 600; }
+    .cl-task-row.cl-due-soon .cl-due-date { color: #d29922; font-weight: 600; }
+
+    /* Role badge */
+    .cl-role-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.67rem;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Empty state */
+    .cl-empty {
+      padding: 20px;
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.84rem;
+    }
   </style>
 </head>
 <body>
@@ -234,6 +380,17 @@
   <!-- Timeline (hidden until data loads) -->
   <div id="timeline" style="display:none"></div>
 
+  <!-- Checklist panel (hidden until data loads) -->
+  <div id="checklist" style="display:none">
+    <p class="section-label">Project Checklist</p>
+    <div class="cl-controls">
+      <select id="projectSelect" class="cl-project-select">
+        <option value="">— Select a project —</option>
+      </select>
+    </div>
+    <div id="checklistTasks"></div>
+  </div>
+
   <!-- Debug panel -->
   <p class="section-label" style="margin-top:8px">Debug &amp; Data Log</p>
   <div id="debugPanel">
@@ -248,7 +405,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v2.5';
+  const VERSION = 'v3.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1047,8 +1204,9 @@
     appState.taskDefs  = taskDefs;
     appState.allTasks  = allTasks;
 
-    // ── Render timeline ───────────────────────────────────────────────────────
+    // ── Render timeline & checklist ───────────────────────────────────────────
     renderTimeline();
+    renderChecklist();
 
     // ── 8. Timeline match diagnostic ──────────────────────────────────────────
     logSection('8. TIMELINE MATCH DIAGNOSTIC');
@@ -1103,6 +1261,125 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // CHECKLIST PANEL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Returns 'overdue', 'due-soon', or '' based on today's date.
+  function dateUrgency(dueDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate.getTime());
+    due.setHours(0, 0, 0, 0);
+    if (due < today) return 'overdue';
+    const diffDays = (due - today) / (1000 * 60 * 60 * 24);
+    if (diffDays <= 7) return 'due-soon';
+    return '';
+  }
+
+  // Rebuild the dropdown and (re-)render tasks for the currently selected project.
+  function renderChecklist() {
+    const container = document.getElementById('checklist');
+    if (!appState.projects.length) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+
+    const select   = document.getElementById('projectSelect');
+    const prevVal  = select.value;
+
+    // Rebuild option list preserving the previous selection
+    select.innerHTML = '<option value="">— Select a project —</option>';
+    for (const p of appState.projects) {
+      const opt = document.createElement('option');
+      opt.value       = p.name;
+      opt.textContent = p.name;
+      if (p.name === prevVal) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    if (select.value) {
+      renderChecklistTasks(select.value);
+    } else {
+      document.getElementById('checklistTasks').innerHTML =
+        '<div class="cl-empty">Select a project above to view its task checklist.</div>';
+    }
+  }
+
+  // Render the grouped task list for one project.
+  function renderChecklistTasks(projectName) {
+    const container  = document.getElementById('checklistTasks');
+    const stageOrder = Object.keys(STAGE_COLUMNS);
+    let html = '<div class="cl-tasks-wrap">';
+    let hasAny = false;
+
+    for (const stage of stageOrder) {
+      const stageTasks = appState.allTasks
+        .filter(t => t.projectName === projectName && t.stage === stage)
+        .sort((a, b) => a.dueDate - b.dueDate);
+
+      if (!stageTasks.length) continue;
+      hasAny = true;
+
+      const sc = STAGE_COLORS[stage];
+      html += `<div class="cl-stage-group">`;
+      html += `<div class="cl-stage-heading">
+        <span class="cl-stage-chip"
+          style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+          ${esc(stage)}
+        </span>
+      </div>`;
+
+      for (const t of stageTasks) {
+        const ticked  = !!appState.tickState[t.tickKey];
+        const urgency = ticked ? '' : dateUrgency(t.dueDate);
+        const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+
+        let rowClass = 'cl-task-row';
+        if (ticked)              rowClass += ' cl-ticked';
+        else if (urgency)        rowClass += ` cl-${urgency}`;
+
+        html += `
+          <div class="${rowClass}">
+            <label class="cl-checkbox-wrap" title="${ticked ? 'Untick' : 'Tick as done'}">
+              <input type="checkbox" class="cl-checkbox"
+                data-tick-key="${esc(t.tickKey)}"
+                data-project="${esc(projectName)}"
+                ${ticked ? 'checked' : ''}>
+            </label>
+            <span class="cl-task-label${ticked ? ' cl-ticked-text' : ''}">${esc(t.taskDef.label)}</span>
+            <span class="cl-stage-chip-sm"
+              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+              ${esc(stage)}
+            </span>
+            <span class="cl-due-date">${fmtDate(t.dueDate)}</span>
+            <span class="cl-role-badge"
+              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(t.taskDef.role)}
+            </span>
+          </div>`;
+      }
+
+      html += '</div>'; // cl-stage-group
+    }
+
+    if (!hasAny) {
+      html += '<div class="cl-empty">No tasks found for this project.</div>';
+    }
+
+    html += '</div>'; // cl-tasks-wrap
+    container.innerHTML = html;
+
+    // Attach checkbox change listeners
+    container.querySelectorAll('.cl-checkbox').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const key     = e.target.dataset.tickKey;
+        const project = e.target.dataset.project;
+        setTick(key, e.target.checked);
+        renderChecklistTasks(project);
+        renderTimeline();
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // BUTTON HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1142,6 +1419,16 @@
   if (typeof window.showDirectoryPicker !== 'function') {
     document.getElementById('firefoxWarning').style.display = 'block';
   }
+
+  // Project dropdown
+  document.getElementById('projectSelect').addEventListener('change', e => {
+    if (e.target.value) {
+      renderChecklistTasks(e.target.value);
+    } else {
+      document.getElementById('checklistTasks').innerHTML =
+        '<div class="cl-empty">Select a project above to view its task checklist.</div>';
+    }
+  });
 
   // Render initial idle state
   clearDebug();
