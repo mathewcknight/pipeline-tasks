@@ -806,6 +806,25 @@
     try {
       pipelineRows = await parseXLSX(pipelineFile, 'MK Pipeline');
       log(`✓ pipeline_data.xlsx → "MK Pipeline":  ${pipelineRows.length} row(s)`, 'dl-ok');
+
+      // ── DEBUG: raw stage-column types from first 3 rows ──────────────────────
+      log(`   Raw stage-column types (first ${Math.min(3, pipelineRows.length)} row(s)):`, 'dl-dim');
+      for (const row of pipelineRows.slice(0, 3)) {
+        const name = String(row['Project: Project Name'] || '(unnamed)').trim().slice(0, 28);
+        log(`   ── ${name}`, 'dl-dim');
+        for (const [stage, col] of Object.entries(STAGE_COLUMNS)) {
+          const val = row[col];
+          let desc;
+          if (val === '' || val === undefined || val === null) {
+            desc = '(empty)';
+          } else if (val instanceof Date) {
+            desc = `Date  →  ${val.toISOString()}`;
+          } else {
+            desc = `${typeof val}  →  ${JSON.stringify(String(val).slice(0, 40))}`;
+          }
+          log(`      ${stage.padEnd(24)} ${desc}`, 'dl-dim');
+        }
+      }
     } catch (e) {
       log(`✗ ${e.message}`, 'dl-err');
       return;
@@ -982,6 +1001,44 @@
 
     // ── Render timeline ───────────────────────────────────────────────────────
     renderTimeline();
+
+    // ── 8. Timeline match diagnostic ──────────────────────────────────────────
+    logSection('8. TIMELINE MATCH DIAGNOSTIC');
+
+    const tlMonths = getTimelineMonths();
+    log(`Window: ${tlMonths.map(m => m.key + (m.isCurrent ? ' (current)' : '')).join('  ·  ')}`, 'dl-ok');
+
+    let inWindow = 0, outWindow = 0, nullDates = 0;
+    for (const project of projects) {
+      const pName = project.name.slice(0, 26);
+      for (const [stage, sd] of Object.entries(project.stageDates)) {
+        if (!sd || !sd.actual) { nullDates++; continue; }
+        const mk      = toMonthKey(sd.actual);
+        const matched = tlMonths.some(m => m.key === mk);
+        if (matched) {
+          inWindow++;
+          log(`   ✓ ${pName}  /  ${stage}  →  ${mk}`, 'dl-ok');
+        } else {
+          outWindow++;
+          log(`   ✗ ${pName}  /  ${stage}  →  ${mk}  (outside window)`, 'dl-warn');
+        }
+      }
+    }
+    if (nullDates > 0) {
+      log(`   — ${nullDates} stage date(s) are null (coerceDate returned null or no forecast date)`, 'dl-err');
+    }
+    log('', '');
+    if (inWindow > 0) {
+      log(`✓ ${inWindow} stage date(s) fall within the window — cells should be populated`, 'dl-ok');
+    } else {
+      log(`✗ 0 stage dates fall within the 4-month window — this is why cells are empty`, 'dl-err');
+      if (outWindow > 0) {
+        log(`  (${outWindow} stage date(s) exist but are outside Feb–May 2026)`, 'dl-warn');
+      }
+      if (nullDates > 0) {
+        log(`  (${nullDates} stage date(s) are null — check raw types above)`, 'dl-warn');
+      }
+    }
 
     // ── Done ──────────────────────────────────────────────────────────────────
     logSection('DATA LOAD COMPLETE');
