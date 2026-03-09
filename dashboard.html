@@ -5,41 +5,26 @@
 ║                                                                              ║
 ║  FOLDER SETUP                                                                ║
 ║  Open dashboard.html directly in Chrome or Edge. When prompted, select      ║
-║  the folder that contains all three data files:                              ║
+║  the folder that contains all data files.  Also place xlsx.full.min.js      ║
+║  in the same folder as dashboard.html (not in the data folder).             ║
 ║                                                                              ║
-║    pipeline_data.xlsx       — all projects, dates & role assignments        ║
-║    panel_dates.xlsx         — panel/board meeting calendar                  ║
-║    task_definitions.json    — (optional) custom task checklist definitions  ║
+║  REQUIRED DATA FILES (case-sensitive names)                                  ║
+║    pipeline_data.xlsx       sheet: "MK Pipeline"                            ║
+║    panel_dates.xlsx         sheet: "Sheet1" (wide format)                   ║
+║                               Row 1: month names                            ║
+║                               Row 2+: Panel Meeting / Board Meeting dates   ║
+║    task_definitions.xlsx    sheet 1: "Project Tasks"                        ║
+║                               cols: id, label, role, stage,                 ║
+║                                     days_offset, offset_direction,          ║
+║                                     duration_days                           ║
+║                             sheet 2: "Routine Tasks"                        ║
+║                               cols: id, label, role, impact_team,           ║
+║                                     start_date, interval_days               ║
+║                             (file is optional; built-in tasks used if absent)║
 ║                                                                              ║
-║  FILE NAMING CONVENTIONS                                                     ║
-║  Filenames are case-sensitive and must match exactly as shown above.         ║
-║    pipeline_data.xlsx    Required sheet name: "MK Pipeline"                 ║
-║    panel_dates.xlsx      Required sheet name: "Sheet1"                      ║
-║                            Row 1: month names (e.g. February, March …)     ║
-║                            Row 2: Panel Meeting dates                       ║
-║                            Row 3: Board Meeting dates                       ║
-║                                                                              ║
-║  TASK_DEFINITIONS.JSON SCHEMA                                                ║
-║  Must be a JSON array. Each task object:                                     ║
-║    {                                                                         ║
-║      "id":          "unique_snake_case_id",   // used as localStorage key   ║
-║      "label":       "Human-readable name",                                  ║
-║      "stage":       "EOI Panel",              // see valid values below     ║
-║      "role":        "Analyst",                // display badge only         ║
-║      "days_before": 14                        // days before stage date     ║
-║    }                                                                         ║
-║  Valid stage values:                                                         ║
-║    EOI Panel · Prescreen · Full App Panel · Funding Approval                ║
-║    · Approval to Execute                                                     ║
-║  Valid role values: Analyst · Analyst Assisting · Manager                   ║
-║  If the file is absent, built-in placeholder tasks are used.                ║
-║                                                                              ║
-║  HOW TO RESET TICK STATE                                                     ║
-║  Tick state persists in localStorage under the key:                          ║
-║    pipeline_dashboard_state                                                  ║
-║  To clear all ticks, run in the browser console:                             ║
+║  HOW TO RESET SAVED DATA                                                     ║
+║  Use the "Clear Saved Data" button, or run in the browser console:           ║
 ║    localStorage.removeItem('pipeline_dashboard_state')                       ║
-║  Or: DevTools → Application → Local Storage → delete the key, then reload.  ║
 ║                                                                              ║
 ║  BROWSER SUPPORT                                                             ║
 ║  Requires Chrome or Edge (File System Access API). Firefox not supported.   ║
@@ -368,16 +353,7 @@
       letter-spacing: 0.02em;
     }
 
-    /* Task rows */
-    .cl-task-row {
-      display: grid;
-      grid-template-columns: 28px 1fr auto auto auto;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 12px;
-      border-bottom: 1px solid #21262d;
-      transition: background .1s;
-    }
+    /* Task rows — grid defined at bottom of stylesheet (7-column layout) */
     .cl-task-row:last-child { border-bottom: none; }
     .cl-task-row:hover { background: #1c2128; }
 
@@ -704,6 +680,139 @@
       flex-shrink: 0;
     }
     .btn-delete-task:hover { color: #f85149; background: rgba(248,81,73,0.1); }
+
+    /* ══ Start-date filter toggle ════════════════════════════════════════════ */
+    .btn-filter {
+      padding: 3px 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      color: #8b949e;
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s;
+    }
+    .btn-filter:hover { opacity: .8; }
+    .btn-filter.filter-active { background: #0c2d6b; border-color: #388bfd; color: #79c0ff; }
+
+    /* ══ Start date cell ═════════════════════════════════════════════════════ */
+    .cl-start-date {
+      font-size: 0.75rem;
+      color: #6e7681;
+      white-space: nowrap;
+      min-width: 72px;
+      text-align: right;
+    }
+    .ot-td-start {
+      font-size: 0.75rem;
+      color: #6e7681;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* ══ Due date override indicator ════════════════════════════════════════ */
+    .cl-due-date.cl-overridden { color: #79c0ff; }
+    .ot-td-due.cl-overridden   { color: #79c0ff; }
+
+    /* ══ Pencil edit button ══════════════════════════════════════════════════ */
+    .btn-pencil {
+      background: transparent;
+      border: none;
+      color: #6e7681;
+      cursor: pointer;
+      font-size: 0.78rem;
+      padding: 1px 3px;
+      border-radius: 3px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .btn-pencil:hover { color: #58a6ff; background: rgba(56,139,253,0.12); }
+
+    /* ══ Inline date-override edit row ══════════════════════════════════════ */
+    .cl-edit-row {
+      padding: 10px 14px 12px 40px;
+      background: #0a0f15;
+      border-bottom: 1px solid #21262d;
+      border-top: 1px solid #1a2332;
+    }
+    .cl-edit-section { margin-bottom: 8px; }
+    .cl-edit-section:last-of-type { margin-bottom: 0; }
+    .cl-edit-meta {
+      font-size: 0.72rem;
+      color: #6e7681;
+      margin-bottom: 5px;
+      font-style: italic;
+    }
+    .cl-edit-fields {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .cl-edit-label {
+      font-size: 0.72rem;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+    .cl-date-input {
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #388bfd;
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 0.81rem;
+      font-family: inherit;
+    }
+    .cl-date-input:focus { outline: none; border-color: #58a6ff; }
+    .btn-save-override {
+      padding: 3px 11px;
+      background: #1f6feb;
+      border: 1px solid #388bfd;
+      border-radius: 5px;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-save-override:hover { opacity: .85; }
+    .btn-reset-override {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 0.73rem;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .btn-reset-override:hover { color: #f85149; }
+    .cl-edit-cancel-row { margin-top: 6px; }
+    /* edit row inside open tasks table */
+    .ot-edit-tr td {
+      padding: 10px 14px 12px;
+      background: #0a0f15;
+      border-bottom: 1px solid #21262d;
+    }
+
+    /* ══ Routine task rows ════════════════════════════════════════════════════ */
+    .ot-row-routine { border-left: 2px solid #30363d; }
+    .ot-td-routine-team {
+      font-size: 0.72rem;
+      color: #6e7681;
+      font-style: italic;
+    }
+
+    /* Updated checklist task row — 7 columns: cb label stage start due role del */
+    .cl-task-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #21262d;
+      transition: background .1s;
+    }
   </style>
 </head>
 <body>
@@ -766,6 +875,7 @@
       <div class="panel-header">
         <p class="section-label">All Open Tasks</p>
         <span id="openTaskCount" class="count-badge"></span>
+        <button id="btnStartFilter" class="btn-filter filter-active" title="Toggle start-date filter">Showing: Active tasks only</button>
         <button id="btnAddTask" class="btn-icon" title="Add a custom task">+</button>
       </div>
       <div class="ot-scroll">
@@ -846,7 +956,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v6.0';
+  const VERSION = 'v7.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -937,124 +1047,37 @@
     'DER':              'linear-gradient(rgba(249,115,22,0.11),rgba(249,115,22,0.11)),#161b22',
   };
 
-  // Default task definitions — used if task_definitions.json is absent.
+  // Default task definitions — used if task_definitions.xlsx is absent or unparseable.
   // 3 tasks per stage × 5 stages = 15 tasks, covering all 3 role display labels.
   // The `role` field is a display badge only — every task appears for every project.
+  // Helper to build a default task def with both legacy days_before and new XLSX fields.
+  function _dt(id, label, role, stage, days_offset, offset_direction = 'before', duration_days = null) {
+    return { id, label, role, stage,
+      days_before: offset_direction === 'after' ? -days_offset : days_offset,
+      days_offset, offset_direction, duration_days };
+  }
+
   const DEFAULT_TASKS = [
     // ── EOI Panel ────────────────────────────────────────────────────────────
-    {
-      id: 'eoi_coi_form',
-      label: 'COI Form Submission',
-      role: 'Analyst',
-      stage: 'EOI Panel',
-      days_before: 28,
-    },
-    {
-      id: 'eoi_review_meeting',
-      label: 'EOI Review Meeting',
-      role: 'Manager',
-      stage: 'EOI Panel',
-      days_before: 14,
-    },
-    {
-      id: 'eoi_stakeholder_brief',
-      label: 'Stakeholder Briefing',
-      role: 'Analyst Assisting',
-      stage: 'EOI Panel',
-      days_before: 7,
-    },
-
+    _dt('eoi_coi_form',         'COI Form Submission',             'Analyst',           'EOI Panel',           28),
+    _dt('eoi_review_meeting',   'EOI Review Meeting',              'Manager',            'EOI Panel',           14),
+    _dt('eoi_stakeholder_brief','Stakeholder Briefing',            'Analyst Assisting',  'EOI Panel',            7),
     // ── Prescreen ────────────────────────────────────────────────────────────
-    {
-      id: 'ps_doc_prep',
-      label: 'Prescreen Document Preparation',
-      role: 'Analyst',
-      stage: 'Prescreen',
-      days_before: 21,
-    },
-    {
-      id: 'ps_checklist_review',
-      label: 'Prescreen Checklist Review',
-      role: 'Manager',
-      stage: 'Prescreen',
-      days_before: 14,
-    },
-    {
-      id: 'ps_signoff',
-      label: 'Prescreen Sign-off',
-      role: 'Analyst Assisting',
-      stage: 'Prescreen',
-      days_before: 7,
-    },
-
+    _dt('ps_doc_prep',          'Prescreen Document Preparation',  'Analyst',            'Prescreen',           21),
+    _dt('ps_checklist_review',  'Prescreen Checklist Review',      'Manager',            'Prescreen',           14),
+    _dt('ps_signoff',           'Prescreen Sign-off',              'Analyst Assisting',  'Prescreen',            7),
     // ── Full App Panel ───────────────────────────────────────────────────────
-    {
-      id: 'fa_app_review',
-      label: 'Full Application Review',
-      role: 'Analyst',
-      stage: 'Full App Panel',
-      days_before: 28,
-    },
-    {
-      id: 'fa_panel_prep',
-      label: 'Panel Preparation Meeting',
-      role: 'Manager',
-      stage: 'Full App Panel',
-      days_before: 14,
-    },
-    {
-      id: 'fa_final_check',
-      label: 'Application Final Check',
-      role: 'Analyst Assisting',
-      stage: 'Full App Panel',
-      days_before: 7,
-    },
-
+    _dt('fa_app_review',        'Full Application Review',         'Analyst',            'Full App Panel',      28),
+    _dt('fa_panel_prep',        'Panel Preparation Meeting',       'Manager',            'Full App Panel',      14),
+    _dt('fa_final_check',       'Application Final Check',         'Analyst Assisting',  'Full App Panel',       7),
     // ── Funding Approval ─────────────────────────────────────────────────────
-    {
-      id: 'fund_approval_docs',
-      label: 'Funding Approval Documentation',
-      role: 'Analyst',
-      stage: 'Funding Approval',
-      days_before: 21,
-    },
-    {
-      id: 'fund_committee_prep',
-      label: 'Approval Committee Prep',
-      role: 'Manager',
-      stage: 'Funding Approval',
-      days_before: 14,
-    },
-    {
-      id: 'fund_applicant_comms',
-      label: 'Applicant Communications',
-      role: 'Analyst Assisting',
-      stage: 'Funding Approval',
-      days_before: 7,
-    },
-
+    _dt('fund_approval_docs',   'Funding Approval Documentation',  'Analyst',            'Funding Approval',    21),
+    _dt('fund_committee_prep',  'Approval Committee Prep',         'Manager',            'Funding Approval',    14),
+    _dt('fund_applicant_comms', 'Applicant Communications',        'Analyst Assisting',  'Funding Approval',     7),
     // ── Approval to Execute ──────────────────────────────────────────────────
-    {
-      id: 'ate_agreement_review',
-      label: 'Execution Agreement Review',
-      role: 'Analyst',
-      stage: 'Approval to Execute',
-      days_before: 21,
-    },
-    {
-      id: 'ate_kickoff_prep',
-      label: 'Project Kickoff Preparation',
-      role: 'Analyst Assisting',
-      stage: 'Approval to Execute',
-      days_before: 14,
-    },
-    {
-      id: 'ate_contract_signoff',
-      label: 'Contract Sign-off',
-      role: 'Manager',
-      stage: 'Approval to Execute',
-      days_before: 7,
-    },
+    _dt('ate_agreement_review', 'Execution Agreement Review',      'Analyst',            'Approval to Execute', 21),
+    _dt('ate_kickoff_prep',     'Project Kickoff Preparation',     'Analyst Assisting',  'Approval to Execute', 14),
+    _dt('ate_contract_signoff', 'Contract Sign-off',               'Manager',            'Approval to Execute',  7),
   ];
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1062,13 +1085,18 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   const appState = {
-    dirHandle:    null,
-    projects:     [],    // enriched project objects
-    taskDefs:     [],    // task definition array
-    allTasks:     [],    // flat generated task list
-    tickState:    {},    // { "key": true } from localStorage
-    customTasks:  [],    // user-created task records persisted to localStorage
-    prevDueDates: {},    // { tickKey: "YYYY-MM-DD" } from last save — used to detect date shifts
+    dirHandle:      null,
+    projects:       [],    // enriched project objects
+    taskDefs:       [],    // project task definitions (Sheet 1)
+    routineTasks:   [],    // routine task definitions (Sheet 2)
+    allTasks:       [],    // flat generated task list (project + custom)
+    tickState:      {},    // { "key": true } from localStorage
+    customTasks:    [],    // user-created task records persisted to localStorage
+    prevDueDates:   {},    // { tickKey: "YYYY-MM-DD" } from last save — date-shift detection
+    overrides:      {},    // { "override__key": "YYYY-MM-DD", "override_start__key": "YYYY-MM-DD" }
+    editingTickKey: null,  // tickKey of the task whose inline edit row is open
+    editingPanel:   null,  // 'checklist' | 'opentasks'
+    showActiveOnly: true,  // start-date filter: true = hide tasks not yet started
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1107,7 +1135,7 @@
   // LOCALSTORAGE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Load full persisted state into appState (tick state, custom tasks, previous due dates).
+  // Load full persisted state into appState.
   function loadState() {
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -1116,30 +1144,59 @@
         appState.tickState    = parsed.ticked      || {};
         appState.customTasks  = parsed.customTasks || [];
         appState.prevDueDates = parsed.dueDates    || {};
+        appState.overrides    = parsed.overrides   || {};
         return;
       }
     } catch (_) {}
     appState.tickState    = {};
     appState.customTasks  = [];
     appState.prevDueDates = {};
+    appState.overrides    = {};
   }
 
-  // Persist full state: tick state, custom tasks, and current task due dates.
+  // Persist full state: tick state, custom tasks, due dates, overrides.
   function saveState() {
-    // Snapshot due dates of all generated (non-custom) tasks
     const dueDates = {};
     for (const t of appState.allTasks) {
-      if (!t.isCustom) {
+      if (!t.isCustom && !t.isConcept && t.dueDate) {
         dueDates[t.tickKey] = t.dueDate.toISOString().split('T')[0];
       }
     }
     const payload = {
       ticked:       appState.tickState,
       customTasks:  appState.customTasks,
+      overrides:    appState.overrides,
       dueDates,
       last_updated: new Date().toISOString(),
     };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  }
+
+  // Save / reset a due-date or start-date override, log it, and persist.
+  function saveOverride(key, dateStr) {
+    appState.overrides[key] = dateStr;
+    saveState();
+    log(`[OVERRIDE SET]  ${key}  →  ${dateStr}`, 'dl-ok');
+  }
+  function resetOverride(key) {
+    delete appState.overrides[key];
+    saveState();
+    log(`[OVERRIDE RESET]  ${key}`, 'dl-warn');
+  }
+
+  // Return the effective due date for a task (override beats computed).
+  function getEffectiveDueDate(t) {
+    const ov = appState.overrides[`override__${t.tickKey}`];
+    if (ov) return new Date(ov + 'T00:00:00');
+    return t.dueDate; // may be null for Concept tasks
+  }
+
+  // Return the effective start date (start override beats derived start).
+  // Start date is always derived from the ORIGINAL computed dueDate, not the override.
+  function getEffectiveStartDate(t) {
+    const ov = appState.overrides[`override_start__${t.tickKey}`];
+    if (ov) return new Date(ov + 'T00:00:00');
+    return t.startDate; // null if no duration_days defined
   }
 
   // Public: toggle a task tick and persist immediately
@@ -1246,6 +1303,220 @@
   // Truncate with ellipsis
   function truncate(str, n) {
     return str.length > n ? str.slice(0, n - 1) + '…' : str;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROUTINE TASKS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Compute the next unticked occurrence of a routine task.
+  // Starts from rt.start_date, advances by interval_days until >= today,
+  // then skips any occurrence whose tick key is already in tickState.
+  function getNextRoutineOccurrence(rt) {
+    const startDate = rt.start_date instanceof Date ? rt.start_date : coerceDate(rt.start_date);
+    if (!startDate) return null;
+    const interval = parseInt(rt.interval_days, 10);
+    if (!interval || interval <= 0) return null;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let d = new Date(startDate); d.setHours(0, 0, 0, 0);
+
+    // Advance until we're on or after today
+    while (d < today) d = addDays(d, interval);
+
+    // Skip any already-ticked occurrences (safety limit 200 iterations)
+    for (let i = 0; i < 200; i++) {
+      const occStr = d.toISOString().split('T')[0];
+      if (!appState.tickState[`routine__${rt.id}__${occStr}`]) break;
+      d = addDays(d, interval);
+    }
+
+    const occStr = d.toISOString().split('T')[0];
+    return { dueDate: d, tickKey: `routine__${rt.id}__${occStr}` };
+  }
+
+  // Build the flat list of routine task occurrence objects for rendering.
+  function buildRoutineOccurrences() {
+    const result = [];
+    for (const rt of appState.routineTasks) {
+      const occ = getNextRoutineOccurrence(rt);
+      if (!occ) continue;
+      result.push({
+        isRoutine:   true,
+        taskDef:     { id: rt.id, label: rt.label, role: rt.role, stage: null, duration_days: null },
+        impactTeam:  rt.impact_team || '',
+        dueDate:     occ.dueDate,
+        startDate:   null,
+        tickKey:     occ.tickKey,
+        projectName: null,
+        projectRole: rt.role,
+        stage:       null,
+        isConcept:   false,
+        isCustom:    false,
+      });
+    }
+    return result;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INLINE EDIT ROW (shared by checklist and open-tasks panel)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function buildEditRow(t, panel) {
+    const ovKey      = `override__${t.tickKey}`;
+    const ovStartKey = `override_start__${t.tickKey}`;
+    const hasOv      = !!appState.overrides[ovKey];
+    const hasOvStart = !!appState.overrides[ovStartKey];
+
+    // Effective dates for pre-filling inputs
+    const effDue   = getEffectiveDueDate(t);
+    const effStart = getEffectiveStartDate(t);
+    const dueDateVal   = effDue   ? effDue.toISOString().split('T')[0]   : '';
+    const startDateVal = effStart ? effStart.toISOString().split('T')[0] : '';
+
+    // Meta text — describe the current due-date source
+    let metaDue;
+    if (t.isCustom || t.isRoutine) {
+      metaDue = hasOv
+        ? `Fixed override: ${fmtDate(new Date(appState.overrides[ovKey] + 'T00:00:00'))}`
+        : 'Custom / manually set date';
+    } else if (t.isConcept) {
+      metaDue = 'Concept project — no stage date defined yet';
+    } else if (hasOv) {
+      metaDue = `Fixed override: ${fmtDate(new Date(appState.overrides[ovKey] + 'T00:00:00'))}`;
+    } else {
+      const dir    = t.taskDef.offset_direction || 'before';
+      const offset = t.taskDef.days_offset !== undefined
+        ? t.taskDef.days_offset
+        : Math.abs(t.taskDef.days_before || 0);
+      metaDue = `Offset: ${offset} day${offset === 1 ? '' : 's'} ${dir} ${t.stage}`;
+    }
+
+    // Start date meta
+    const showStart    = t.taskDef.duration_days != null || hasOvStart;
+    let   metaStart    = '';
+    if (hasOvStart) {
+      metaStart = `Fixed start override: ${fmtDate(new Date(appState.overrides[ovStartKey] + 'T00:00:00'))}`;
+    } else if (t.taskDef.duration_days != null) {
+      metaStart = `Derived: ${t.taskDef.duration_days}-day duration before due date (uses original offset date, not the override)`;
+    }
+
+    const dp = esc(panel);
+    const dk = esc(t.tickKey);
+
+    let h = `<div class="cl-edit-row" data-edit-key="${dk}">`;
+
+    // Due-date section
+    h += `<div class="cl-edit-section">`;
+    h += `<div class="cl-edit-meta">${esc(metaDue)}</div>`;
+    h += `<div class="cl-edit-fields">`;
+    h += `<label class="cl-edit-label">Due date:</label>`;
+    h += `<input type="date" class="cl-date-input cl-due-input" value="${esc(dueDateVal)}">`;
+    h += `<button class="btn-save-override cl-save-due" data-tick-key="${dk}" data-panel="${dp}">Save</button>`;
+    if (hasOv) h += `<button class="btn-reset-override cl-reset-due" data-tick-key="${dk}" data-panel="${dp}">Reset to offset</button>`;
+    h += `</div></div>`;
+
+    // Start-date section (only when relevant)
+    if (showStart) {
+      h += `<div class="cl-edit-section">`;
+      h += `<div class="cl-edit-meta">${esc(metaStart)}</div>`;
+      h += `<div class="cl-edit-fields">`;
+      h += `<label class="cl-edit-label">Start date:</label>`;
+      h += `<input type="date" class="cl-date-input cl-start-input" value="${esc(startDateVal)}">`;
+      h += `<button class="btn-save-override cl-save-start" data-tick-key="${dk}" data-panel="${dp}">Save</button>`;
+      if (hasOvStart) h += `<button class="btn-reset-override cl-reset-start" data-tick-key="${dk}" data-panel="${dp}">Reset</button>`;
+      h += `</div></div>`;
+    }
+
+    h += `<div class="cl-edit-cancel-row">`;
+    h += `<button class="btn-reset-override cl-cancel-edit" data-panel="${dp}">Cancel</button>`;
+    h += `</div></div>`;
+    return h;
+  }
+
+  // Attach all inline-edit listeners to a container after innerHTML is set.
+  // projectName is null when called from the open-tasks context.
+  function attachEditRowListeners(container, projectName) {
+    function reRender(panel) {
+      renderSummaryCards();
+      if (panel === 'checklist') {
+        renderChecklistTasks(projectName);
+        renderOpenTasks();
+      } else {
+        renderOpenTasks();
+        const sel = document.getElementById('projectSelect').value;
+        if (sel) renderChecklistTasks(sel);
+      }
+    }
+
+    // Pencil toggle
+    container.querySelectorAll('.cl-pencil, .ot-pencil').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key   = btn.dataset.tickKey;
+        const panel = btn.dataset.panel;
+        if (appState.editingTickKey === key && appState.editingPanel === panel) {
+          appState.editingTickKey = null;
+          appState.editingPanel   = null;
+        } else {
+          appState.editingTickKey = key;
+          appState.editingPanel   = panel;
+        }
+        if (panel === 'checklist') renderChecklistTasks(projectName);
+        else                       renderOpenTasks();
+      });
+    });
+
+    // Save due-date override
+    container.querySelectorAll('.cl-save-due').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row   = btn.closest('.cl-edit-row');
+        const input = row.querySelector('.cl-due-input');
+        if (!input.value) return;
+        saveOverride(`override__${btn.dataset.tickKey}`, input.value);
+        appState.editingTickKey = null; appState.editingPanel = null;
+        reRender(btn.dataset.panel);
+      });
+    });
+
+    // Reset due-date override
+    container.querySelectorAll('.cl-reset-due').forEach(btn => {
+      btn.addEventListener('click', () => {
+        resetOverride(`override__${btn.dataset.tickKey}`);
+        appState.editingTickKey = null; appState.editingPanel = null;
+        reRender(btn.dataset.panel);
+      });
+    });
+
+    // Save start-date override
+    container.querySelectorAll('.cl-save-start').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row   = btn.closest('.cl-edit-row');
+        const input = row.querySelector('.cl-start-input');
+        if (!input.value) return;
+        saveOverride(`override_start__${btn.dataset.tickKey}`, input.value);
+        appState.editingTickKey = null; appState.editingPanel = null;
+        reRender(btn.dataset.panel);
+      });
+    });
+
+    // Reset start-date override
+    container.querySelectorAll('.cl-reset-start').forEach(btn => {
+      btn.addEventListener('click', () => {
+        resetOverride(`override_start__${btn.dataset.tickKey}`);
+        appState.editingTickKey = null; appState.editingPanel = null;
+        reRender(btn.dataset.panel);
+      });
+    });
+
+    // Cancel edit
+    container.querySelectorAll('.cl-cancel-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panel = btn.dataset.panel;
+        appState.editingTickKey = null; appState.editingPanel = null;
+        if (panel === 'checklist') renderChecklistTasks(projectName);
+        else                       renderOpenTasks();
+      });
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1375,9 +1646,37 @@
     return XLSX.utils.sheet_to_json(sheet, { defval: '' });
   }
 
-  async function parseJSONFile(file) {
-    const text = await file.text();
-    return JSON.parse(text);
+  // Parse Sheet 1 (Project Tasks) from task_definitions.xlsx.
+  // Returns array of normalised task def objects with derived `days_before`.
+  function parseProjectTasksSheet(rows) {
+    const VALID_STAGES = new Set(Object.keys(STAGE_COLUMNS));
+    return rows.map(row => {
+      const id               = String(row.id               || '').trim();
+      const label            = String(row.label            || '').trim();
+      const role             = String(row.role             || 'Analyst').trim();
+      const stage            = String(row.stage            || '').trim();
+      const days_offset      = parseFloat(row.days_offset)  || 0;
+      const offset_direction = String(row.offset_direction || 'before').trim().toLowerCase();
+      const dur              = row.duration_days;
+      const duration_days    = (dur !== '' && dur != null && !isNaN(parseFloat(dur)))
+        ? parseFloat(dur) : null;
+      // days_before: positive = before stage date, negative = after
+      const days_before = offset_direction === 'after' ? -days_offset : days_offset;
+      return { id, label, role, stage, days_before, days_offset, offset_direction, duration_days };
+    }).filter(td => td.id && td.label && td.stage && VALID_STAGES.has(td.stage));
+  }
+
+  // Parse Sheet 2 (Routine Tasks) from task_definitions.xlsx.
+  function parseRoutineTasksSheet(rows) {
+    return rows.map(row => {
+      const id           = String(row.id           || '').trim();
+      const label        = String(row.label        || '').trim();
+      const role         = String(row.role         || 'Analyst').trim();
+      const impact_team  = String(row.impact_team  || '').trim();
+      const start_date   = coerceDate(row.start_date);
+      const interval_days = parseInt(row.interval_days, 10);
+      return { id, label, role, impact_team, start_date, interval_days };
+    }).filter(rt => rt.id && rt.label && rt.start_date && rt.interval_days > 0);
   }
 
   // Parse a sheet as array-of-arrays (used for panel_dates wide format)
@@ -1486,19 +1785,40 @@
     }
     log(`✓ panel_dates.xlsx  (${(panelFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
 
-    const taskFile = await getFile('task_definitions.json');
-    let taskDefs;
+    const taskFile = await getFile('task_definitions.xlsx');
+    let taskDefs     = DEFAULT_TASKS;
+    let routineDefs  = [];
     if (!taskFile) {
-      log('⚠  task_definitions.json — not found. Using built-in placeholder tasks.', 'dl-warn');
-      taskDefs = DEFAULT_TASKS;
+      log('⚠  task_definitions.xlsx — not found. Using built-in placeholder tasks (no routine tasks).', 'dl-warn');
     } else {
-      log(`✓ task_definitions.json  (${(taskFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
+      log(`✓ task_definitions.xlsx  (${(taskFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
       try {
-        taskDefs = await parseJSONFile(taskFile);
-        log(`   Loaded ${taskDefs.length} task definition(s) from file.`, 'dl-ok');
+        const ab = await taskFile.arrayBuffer();
+        const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+
+        // Sheet 1: Project Tasks
+        const sheet1Name = wb.SheetNames.find(n => n.trim() === 'Project Tasks');
+        if (sheet1Name) {
+          const rows1  = XLSX.utils.sheet_to_json(wb.Sheets[sheet1Name], { defval: '' });
+          taskDefs     = parseProjectTasksSheet(rows1);
+          log(`   Sheet "Project Tasks": ${taskDefs.length} task def(s) loaded.`, 'dl-ok');
+        } else {
+          log(`⚠  Sheet "Project Tasks" not found in task_definitions.xlsx — using built-ins. Available: ${wb.SheetNames.join(', ')}`, 'dl-warn');
+        }
+
+        // Sheet 2: Routine Tasks
+        const sheet2Name = wb.SheetNames.find(n => n.trim() === 'Routine Tasks');
+        if (sheet2Name) {
+          const rows2 = XLSX.utils.sheet_to_json(wb.Sheets[sheet2Name], { defval: '' });
+          routineDefs = parseRoutineTasksSheet(rows2);
+          log(`   Sheet "Routine Tasks": ${routineDefs.length} routine task(s) loaded.`, 'dl-ok');
+        } else {
+          log('   Sheet "Routine Tasks" not found — no routine tasks loaded.', 'dl-dim');
+        }
       } catch (e) {
-        log(`⚠  Failed to parse task_definitions.json (${e.message}). Using defaults.`, 'dl-warn');
-        taskDefs = DEFAULT_TASKS;
+        log(`⚠  Failed to parse task_definitions.xlsx (${e.message}). Using built-in defaults.`, 'dl-warn');
+        taskDefs    = DEFAULT_TASKS;
+        routineDefs = [];
       }
     }
 
@@ -1655,14 +1975,36 @@
     // ── 5. Task generation ────────────────────────────────────────────────────
     logSection('5. TASK GENERATION');
 
-    // Tasks due more than 3 months before today are stale — skip them.
+    // Tasks due more than 3 months ago are stale — skip them.
     const threeMonthsAgo = addDays(new Date(), -90);
     threeMonthsAgo.setHours(0, 0, 0, 0);
 
     const allTasks = [];
 
     for (const project of projects) {
-      // Determine which stages are already complete based on the pipeline Stage column.
+      // Detect Concept stage: all stage date columns are empty for this project
+      const isConcept = Object.values(project.stageDates).every(sd => sd === null);
+
+      if (isConcept) {
+        // Generate all project task defs with dueDate = null (no stage date available yet)
+        log(`   [${project.name}]  — Concept stage (no dates): generating ${taskDefs.length} placeholder task(s)`, 'dl-dim');
+        for (const td of taskDefs) {
+          allTasks.push({
+            projectName:     project.name,
+            projectRole:     project.role,
+            stage:           td.stage,
+            taskDef:         td,
+            dueDate:         null,
+            startDate:       null,
+            actualStageDate: null,
+            tickKey:         tickKey(project.name, td.stage, td.id),
+            isConcept:       true,
+          });
+        }
+        continue; // skip date-based generation below
+      }
+
+      // Normal date-based generation
       const skipStages = PIPELINE_STAGE_SKIP[project.pipelineStage] || [];
       if (skipStages.length) {
         log(
@@ -1675,8 +2017,6 @@
       for (const [stage, sd] of Object.entries(project.stageDates)) {
         if (!sd || !sd.actual) continue;
 
-        // Skip this stage if it's in the completed set — UNLESS localStorage already
-        // contains at least one key for this project+stage (tasks from a prior session).
         if (skipStages.includes(stage)) {
           const lsPrefix  = `${project.name}__${stage}__`;
           const hasLegacy = Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix));
@@ -1689,20 +2029,29 @@
 
         const stageTasks = taskDefs.filter(t => t.stage === stage);
         for (const td of stageTasks) {
-          const dueDate = addDays(sd.actual, -td.days_before);
-          // Skip tasks that are stale (due more than 3 months ago)
-          if (dueDate < threeMonthsAgo) {
-            log(`      ↳ skipped stale task "${td.id}" for "${project.name}" / ${stage} — due ${fmtDate(dueDate)}`, 'dl-dim');
+          // dueDate: offset_direction 'before' → subtract, 'after' → add
+          const computedDueDate = addDays(sd.actual, -td.days_before);
+          // startDate: derived from original computed due date + duration_days (never from override)
+          const startDate = td.duration_days != null
+            ? addDays(computedDueDate, -td.duration_days)
+            : null;
+
+          // Skip stale tasks (due more than 3 months ago)
+          if (computedDueDate < threeMonthsAgo) {
+            log(`      ↳ stale task skipped: "${td.id}" for "${project.name}"/${stage} — due ${fmtDate(computedDueDate)}`, 'dl-dim');
             continue;
           }
+
           allTasks.push({
-            projectName:      project.name,
-            projectRole:      project.role,
+            projectName:     project.name,
+            projectRole:     project.role,
             stage,
-            taskDef:          td,
-            dueDate,
-            actualStageDate:  sd.actual,
-            tickKey:          tickKey(project.name, stage, td.id),
+            taskDef:         td,
+            dueDate:         computedDueDate,
+            startDate,
+            actualStageDate: sd.actual,
+            tickKey:         tickKey(project.name, stage, td.id),
+            isConcept:       false,
           });
         }
       }
@@ -1711,55 +2060,57 @@
     // ── 5b. Add custom tasks to allTasks ─────────────────────────────────────
     for (const ct of appState.customTasks) {
       const project = projects.find(p => p.name === ct.projectName);
-      if (!project) continue; // project no longer in pipeline data
-      const dueDate = new Date(ct.dueDate);
+      if (!project) continue;
+      const dueDate = new Date(ct.dueDate + 'T00:00:00');
       if (isNaN(dueDate.getTime())) continue;
-      if (dueDate < threeMonthsAgo) continue; // apply same stale cutoff
+      if (dueDate < threeMonthsAgo) continue;
       allTasks.push({
         projectName:     ct.projectName,
         projectRole:     project.role,
         stage:           ct.stage,
-        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0 },
+        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
         dueDate,
+        startDate:       null,
         actualStageDate: null,
         tickKey:         tickKey(ct.projectName, ct.stage, ct.id),
         isCustom:        true,
+        isConcept:       false,
       });
     }
 
     log(`Generated ${allTasks.length} task(s) across ${projects.length} project(s) (incl. ${appState.customTasks.length} custom):`, 'dl-ok');
     for (const t of allTasks) {
       const ticked = appState.tickState[t.tickKey] ? ' ✓' : '';
-      log(
-        `   [${t.projectName}]  ${t.stage}  /  ${t.taskDef.id}` +
-        `  →  due ${fmtDate(t.dueDate)}` +
-        (t.isCustom ? '  [custom]' : `  (${t.taskDef.days_before}d before ${fmtDate(t.actualStageDate)})`) +
-        ticked,
-        'dl-dim',
-      );
+      const dateInfo = t.isConcept ? '(Concept — no date)'
+        : t.isCustom ? `due ${fmtDate(t.dueDate)}`
+        : `due ${fmtDate(t.dueDate)}  (${t.taskDef.days_offset || Math.abs(t.taskDef.days_before)}d ${t.taskDef.offset_direction || 'before'} ${fmtDate(t.actualStageDate)})`;
+      log(`   [${t.projectName}]  ${t.stage}  /  ${t.taskDef.id}  →  ${dateInfo}${ticked}`, 'dl-dim');
     }
 
-    // ── 5c. Date-shift detection ───────────────────────────────────────────────
+    // ── 5c. Date-shift detection (skip overridden and Concept tasks) ──────────
     logSection('5c. DATE SHIFT DETECTION');
     let shiftCount = 0;
     for (const t of allTasks) {
-      if (t.isCustom) continue; // custom tasks have explicit user-set dates
+      if (t.isCustom || t.isConcept) continue;
+      if (appState.overrides[`override__${t.tickKey}`]) continue; // override in place — ignore shifts
       const oldDateStr = appState.prevDueDates[t.tickKey];
       const newDateStr = t.dueDate.toISOString().split('T')[0];
       if (oldDateStr && oldDateStr !== newDateStr) {
-        const oldDate = new Date(oldDateStr);
-        log(
-          `[DATE SHIFT]  ${t.projectName} / ${t.stage} / ${t.taskDef.id}:` +
-          `  ${fmtDate(oldDate)} → ${fmtDate(t.dueDate)}`,
-          'dl-warn',
-        );
+        log(`[DATE SHIFT]  ${t.projectName} / ${t.stage} / ${t.taskDef.id}:  ${fmtDate(new Date(oldDateStr))} → ${fmtDate(t.dueDate)}`, 'dl-warn');
         shiftCount++;
       }
     }
-    if (shiftCount === 0) {
-      log('No due-date shifts detected since last load.', 'dl-dim');
+    if (shiftCount === 0) log('No due-date shifts detected since last load.', 'dl-dim');
+    else                  log(`${shiftCount} due-date shift(s) detected — tick state preserved.`, 'dl-warn');
+
+    // ── 5d. Overrides log ─────────────────────────────────────────────────────
+    logSection('5d. OVERRIDES');
+    const ovKeys = Object.keys(appState.overrides);
+    if (ovKeys.length === 0) {
+      log('No date overrides in localStorage.', 'dl-dim');
     } else {
-      log(`${shiftCount} due-date shift(s) detected — tick state preserved.`, 'dl-warn');
+      log(`${ovKeys.length} override(s):`, 'dl-ok');
+      for (const k of ovKeys) log(`   ${k}  →  ${appState.overrides[k]}`, 'dl-dim');
     }
 
     // ── 6. LocalStorage tick state ────────────────────────────────────────────
@@ -1778,19 +2129,21 @@
     // ── 7. Task definitions summary ───────────────────────────────────────────
     logSection('7. TASK DEFINITIONS LOADED');
 
-    log(`${taskDefs.length} definition(s):`, 'dl-ok');
+    log(`${taskDefs.length} project task def(s):`, 'dl-ok');
     for (const td of taskDefs) {
-      log(
-        `   [${td.stage}]  ${td.id}:  "${td.label}"` +
-        `  |  role-badge=${td.role}  |  ${td.days_before}d before`,
-        'dl-dim',
-      );
+      const durStr = td.duration_days != null ? `  duration=${td.duration_days}d` : '';
+      log(`   [${td.stage}]  ${td.id}:  "${td.label}"  |  ${td.days_offset}d ${td.offset_direction}${durStr}`, 'dl-dim');
+    }
+    log(`${routineDefs.length} routine task def(s):`, routineDefs.length ? 'dl-ok' : 'dl-dim');
+    for (const rt of routineDefs) {
+      log(`   [${rt.impact_team || 'any team'}]  ${rt.id}:  "${rt.label}"  |  every ${rt.interval_days}d from ${fmtDate(rt.start_date)}`, 'dl-dim');
     }
 
     // ── Store to appState ─────────────────────────────────────────────────────
-    appState.projects  = projects;
-    appState.taskDefs  = taskDefs;
-    appState.allTasks  = allTasks;
+    appState.projects     = projects;
+    appState.taskDefs     = taskDefs;
+    appState.routineTasks = routineDefs;
+    appState.allTasks     = allTasks;
 
     // ── Render timeline, checklist, open tasks & summary cards ───────────────
     renderTimeline();
@@ -1867,14 +2220,28 @@
     today.setHours(0, 0, 0, 0);
 
     let overdue = 0, dueToday = 0, dueWeek = 0;
+
+    // Project tasks
     for (const t of appState.allTasks) {
-      if (appState.tickState[t.tickKey]) continue; // skip ticked tasks
-      const due = new Date(t.dueDate.getTime());
-      due.setHours(0, 0, 0, 0);
-      const diff = (due - today) / (1000 * 60 * 60 * 24);
-      if (diff < 0)              overdue++;
-      else if (diff === 0)       dueToday++;
-      else if (diff <= 7)        dueWeek++;
+      if (appState.tickState[t.tickKey]) continue;
+      if (t.isConcept) continue; // no due date
+      const due = getEffectiveDueDate(t);
+      if (!due) continue;
+      const d = new Date(due.getTime()); d.setHours(0, 0, 0, 0);
+      const diff = (d - today) / (1000 * 60 * 60 * 24);
+      if (diff < 0)        overdue++;
+      else if (diff === 0) dueToday++;
+      else if (diff <= 7)  dueWeek++;
+    }
+
+    // Routine tasks
+    for (const occ of buildRoutineOccurrences()) {
+      if (appState.tickState[occ.tickKey]) continue;
+      const d = new Date(occ.dueDate.getTime()); d.setHours(0, 0, 0, 0);
+      const diff = (d - today) / (1000 * 60 * 60 * 24);
+      if (diff < 0)        overdue++;
+      else if (diff === 0) dueToday++;
+      else if (diff <= 7)  dueWeek++;
     }
 
     document.getElementById('statOverdue').textContent = overdue;
@@ -1892,7 +2259,9 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   // Returns 'overdue', 'due-soon', or '' based on today's date.
+  // Pass a Date object (or null — returns '' for null).
   function dateUrgency(dueDate) {
+    if (!dueDate) return '';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(dueDate.getTime());
@@ -1940,7 +2309,13 @@
     for (const stage of stageOrder) {
       const stageTasks = appState.allTasks
         .filter(t => t.projectName === projectName && t.stage === stage)
-        .sort((a, b) => a.dueDate - b.dueDate);
+        .sort((a, b) => {
+          // Concept tasks (null dueDate) sort to the end
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return a.dueDate - b.dueDate;
+        });
 
       if (!stageTasks.length) continue;
       hasAny = true;
@@ -1955,13 +2330,20 @@
       </div>`;
 
       for (const t of stageTasks) {
-        const ticked  = !!appState.tickState[t.tickKey];
-        const urgency = ticked ? '' : dateUrgency(t.dueDate);
-        const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+        const ticked    = !!appState.tickState[t.tickKey];
+        const effDue    = getEffectiveDueDate(t);
+        const effStart  = getEffectiveStartDate(t);
+        const urgency   = ticked ? '' : dateUrgency(effDue);
+        const rc        = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
+        const hasOv     = !!appState.overrides[`override__${t.tickKey}`];
+        const isEditing = appState.editingTickKey === t.tickKey && appState.editingPanel === 'checklist';
 
         let rowClass = 'cl-task-row';
-        if (ticked)              rowClass += ' cl-ticked';
-        else if (urgency)        rowClass += ` cl-${urgency}`;
+        if (ticked)        rowClass += ' cl-ticked';
+        else if (urgency)  rowClass += ` cl-${urgency}`;
+
+        const dueDateDisplay = effDue ? fmtDate(effDue) : '—';
+        const startDisplay   = effStart ? fmtDate(effStart) : '—';
 
         html += `
           <div class="${rowClass}">
@@ -1979,15 +2361,25 @@
               style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
               ${esc(stage)}
             </span>
-            <span class="cl-due-date">${fmtDate(t.dueDate)}</span>
+            <span class="cl-start-date" title="Start date">${esc(startDisplay)}</span>
+            <span style="display:flex;align-items:center;gap:3px;flex-shrink:0">
+              <span class="cl-due-date${hasOv ? ' cl-overridden' : ''}">${esc(dueDateDisplay)}</span>
+              <button class="btn-pencil cl-pencil"
+                data-tick-key="${esc(t.tickKey)}"
+                data-panel="checklist"
+                title="Edit due/start date">✎</button>
+            </span>
             <span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
               <span class="cl-role-badge"
                 style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-                ${esc(t.taskDef.role)}
+                ${esc(t.projectRole)}
               </span>
               ${t.isCustom ? `<button class="btn-delete-task cl-delete-custom" data-tick-key="${esc(t.tickKey)}" data-project="${esc(projectName)}" title="Delete custom task">✕</button>` : ''}
             </span>
           </div>`;
+
+        // Inline edit row (shown when this task's pencil was clicked)
+        if (isEditing) html += buildEditRow(t, 'checklist');
       }
 
       html += '</div>'; // cl-stage-group
@@ -2000,7 +2392,7 @@
     html += '</div>'; // cl-tasks-wrap
     container.innerHTML = html;
 
-    // Attach checkbox change listeners — sync right panel, timeline, and summary cards
+    // Checkboxes
     container.querySelectorAll('.cl-checkbox').forEach(cb => {
       cb.addEventListener('change', e => {
         const key     = e.target.dataset.tickKey;
@@ -2013,7 +2405,7 @@
       });
     });
 
-    // Attach delete listeners for custom tasks
+    // Delete custom tasks
     container.querySelectorAll('.cl-delete-custom').forEach(btn => {
       btn.addEventListener('click', e => {
         const key     = e.target.dataset.tickKey;
@@ -2025,6 +2417,9 @@
         renderSummaryCards();
       });
     });
+
+    // Inline edit listeners (pencil, save, reset, cancel)
+    attachEditRowListeners(container, projectName);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2036,65 +2431,140 @@
     if (!appState.projects.length) { container.style.display = 'none'; return; }
     container.style.display = 'block';
 
-    const listEl    = document.getElementById('openTasksList');
-    const countEl   = document.getElementById('openTaskCount');
+    const listEl  = document.getElementById('openTasksList');
+    const countEl = document.getElementById('openTaskCount');
 
-    // All unticked tasks, sorted by due date ascending
-    const tasks = appState.allTasks
-      .filter(t => !appState.tickState[t.tickKey])
-      .sort((a, b) => a.dueDate - b.dueDate);
-
-    // Update count badge
-    if (countEl) {
-      countEl.textContent = tasks.length ? `${tasks.length} open` : 'all done';
-      countEl.className   = tasks.length ? 'count-badge has-items' : 'count-badge';
+    // Update filter toggle button text/state
+    const filterBtn = document.getElementById('btnStartFilter');
+    if (filterBtn) {
+      filterBtn.textContent = appState.showActiveOnly ? 'Showing: Active tasks only' : 'Showing: All tasks';
+      filterBtn.classList.toggle('filter-active', appState.showActiveOnly);
     }
 
-    if (!tasks.length) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    // Build project task list — exclude Concept (no due date) and ticked
+    let projTasks = appState.allTasks
+      .filter(t => !appState.tickState[t.tickKey] && !t.isConcept);
+
+    if (appState.showActiveOnly) {
+      projTasks = projTasks.filter(t => {
+        const sd = getEffectiveStartDate(t);
+        return !sd || sd <= today;
+      });
+    }
+
+    // Sort by effective due date
+    projTasks.sort((a, b) => {
+      const da = getEffectiveDueDate(a), db = getEffectiveDueDate(b);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da - db;
+    });
+
+    // Routine task occurrences (always shown, not filtered by start date)
+    const routineOccs = buildRoutineOccurrences().filter(r => !appState.tickState[r.tickKey]);
+
+    // Combine: project tasks + routine tasks sorted together by due date
+    const allRows = [...projTasks, ...routineOccs].sort((a, b) => {
+      const da = a.isRoutine ? a.dueDate : getEffectiveDueDate(a);
+      const db = b.isRoutine ? b.dueDate : getEffectiveDueDate(b);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da - db;
+    });
+
+    const totalOpen = allRows.length;
+    if (countEl) {
+      countEl.textContent = totalOpen ? `${totalOpen} open` : 'all done';
+      countEl.className   = totalOpen ? 'count-badge has-items' : 'count-badge';
+    }
+
+    if (!totalOpen) {
       listEl.innerHTML = '<div class="ot-all-done">✓ All tasks complete</div>';
       return;
     }
 
-    // Col widths: project | stage | task | usual-owner | due | tick | delete
+    // 8 columns: Project | Stage | Task | Role | Start | Due+pencil | ✓ | del
     let html = `
       <table class="ot-table">
         <thead><tr>
-          <th class="ot-th" style="width:18%">Project</th>
-          <th class="ot-th" style="width:15%">Stage</th>
+          <th class="ot-th" style="width:15%">Project</th>
+          <th class="ot-th" style="width:12%">Stage</th>
           <th class="ot-th">Task</th>
-          <th class="ot-th" style="width:13%">Usual Task Owner</th>
+          <th class="ot-th" style="width:11%">Role</th>
+          <th class="ot-th" style="width:78px;text-align:right">Start</th>
           <th class="ot-th" style="width:90px;text-align:right">Due</th>
           <th class="ot-th" style="width:36px;text-align:center">✓</th>
           <th class="ot-th" style="width:28px"></th>
         </tr></thead>
         <tbody>`;
 
-    for (const t of tasks) {
-      const sc      = STAGE_COLORS[t.stage];
-      const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
-      const urgency = dateUrgency(t.dueDate);
+    for (const t of allRows) {
+      const isEditing = appState.editingTickKey === t.tickKey && appState.editingPanel === 'opentasks';
+
+      if (t.isRoutine) {
+        // Routine task row — no start date, no delete, no stage chip
+        const urgency = dateUrgency(t.dueDate);
+        const rowCls  = urgency ? ` cl-${urgency}` : '';
+        const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+        html += `
+          <tr class="ot-row ot-row-routine${rowCls}">
+            <td class="ot-td ot-td-routine-team" title="${esc(t.impactTeam || 'Routine')}">${esc(t.impactTeam || 'Routine')}</td>
+            <td class="ot-td" style="color:#6e7681;font-size:0.75rem">—</td>
+            <td class="ot-td">${esc(t.taskDef.label)}</td>
+            <td class="ot-td">
+              <span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+                ${esc(t.taskDef.role)}
+              </span>
+            </td>
+            <td class="ot-td ot-td-start">—</td>
+            <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
+            <td class="ot-td ot-td-tick">
+              <input type="checkbox" class="ot-checkbox" data-tick-key="${esc(t.tickKey)}" data-project="">
+            </td>
+            <td class="ot-td"></td>
+          </tr>`;
+        if (isEditing) {
+          html += `<tr class="ot-edit-tr"><td colspan="8">${buildEditRow(t, 'opentasks')}</td></tr>`;
+        }
+        continue;
+      }
+
+      // Project task row
+      const sc      = t.stage ? STAGE_COLORS[t.stage] : null;
+      const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
+      const effDue  = getEffectiveDueDate(t);
+      const effSt   = getEffectiveStartDate(t);
+      const urgency = dateUrgency(effDue);
       const rowCls  = urgency ? ` cl-${urgency}` : '';
+      const hasOv   = !!appState.overrides[`override__${t.tickKey}`];
 
       html += `
         <tr class="ot-row${rowCls}">
           <td class="ot-td ot-td-project" title="${esc(t.projectName)}">${esc(truncate(t.projectName, 22))}</td>
-          <td class="ot-td">
-            <span class="cl-stage-chip-sm"
-              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
-              ${esc(t.stage)}
-            </span>
-          </td>
+          <td class="ot-td">${sc
+            ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
+            : '—'}</td>
           <td class="ot-td" title="${esc(t.taskDef.label)}">
             ${esc(t.taskDef.label)}
             ${t.isCustom ? '<span class="custom-badge" style="margin-left:4px">custom</span>' : ''}
           </td>
           <td class="ot-td">
-            <span class="cl-role-badge"
-              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.taskDef.role)}
+            <span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(t.projectRole)}
             </span>
           </td>
-          <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
+          <td class="ot-td ot-td-start">${effSt ? esc(fmtDate(effSt)) : '—'}</td>
+          <td class="ot-td ot-td-due${hasOv ? ' cl-overridden' : ''}">
+            ${effDue ? esc(fmtDate(effDue)) : '—'}
+            <button class="btn-pencil ot-pencil"
+              data-tick-key="${esc(t.tickKey)}"
+              data-panel="opentasks"
+              title="Edit due/start date">✎</button>
+          </td>
           <td class="ot-td ot-td-tick">
             <input type="checkbox" class="ot-checkbox"
               data-tick-key="${esc(t.tickKey)}"
@@ -2106,29 +2576,32 @@
               : ''}
           </td>
         </tr>`;
+
+      if (isEditing) {
+        html += `<tr class="ot-edit-tr"><td colspan="8">${buildEditRow(t, 'opentasks')}</td></tr>`;
+      }
     }
 
     html += '</tbody></table>';
     listEl.innerHTML = html;
 
-    // Attach tick listeners — ticking removes from this list and syncs checklist + cards
+    // Tick checkboxes
     listEl.querySelectorAll('.ot-checkbox').forEach(cb => {
       cb.addEventListener('change', e => {
         const key     = e.target.dataset.tickKey;
         const project = e.target.dataset.project;
-        setTick(key, true); // can only tick (not untick) from this panel
+        setTick(key, true); // tick only from this panel
         renderOpenTasks();
         renderTimeline();
         renderSummaryCards();
-        // Sync left checklist if the affected project is currently selected
-        const selectedProject = document.getElementById('projectSelect').value;
-        if (selectedProject === project) {
-          renderChecklistTasks(project);
+        if (project) {
+          const sel = document.getElementById('projectSelect').value;
+          if (sel === project) renderChecklistTasks(project);
         }
       });
     });
 
-    // Delete listeners for custom tasks
+    // Delete custom tasks
     listEl.querySelectorAll('.ot-delete-custom').forEach(btn => {
       btn.addEventListener('click', e => {
         const key     = e.target.dataset.tickKey;
@@ -2137,10 +2610,13 @@
         renderOpenTasks();
         renderTimeline();
         renderSummaryCards();
-        const selectedProject = document.getElementById('projectSelect').value;
-        if (selectedProject === project) renderChecklistTasks(project);
+        const sel = document.getElementById('projectSelect').value;
+        if (sel === project) renderChecklistTasks(project);
       });
     });
+
+    // Inline edit listeners
+    attachEditRowListeners(listEl, null);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2198,6 +2674,12 @@
     toggle.addEventListener('click', toggleDebug);
     toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDebug(); } });
   })();
+
+  // Start-date filter toggle
+  document.getElementById('btnStartFilter').addEventListener('click', () => {
+    appState.showActiveOnly = !appState.showActiveOnly;
+    renderOpenTasks();
+  });
 
   // Project dropdown
   document.getElementById('projectSelect').addEventListener('change', e => {
@@ -2283,11 +2765,13 @@
           projectName,
           projectRole:     project.role,
           stage,
-          taskDef:         { id, label, role, stage, days_before: 0 },
+          taskDef:         { id, label, role, stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
           dueDate,
+          startDate:       null,
           actualStageDate: null,
           tickKey:         tickKey(projectName, stage, id),
           isCustom:        true,
+          isConcept:       false,
         });
       }
 
@@ -2331,9 +2815,10 @@
   log(`${VERSION} ready. Click "Select Dashboard Folder" to begin.`, 'dl-dim');
   log('', '');
   log('Expected files in the selected folder:', 'dl-dim');
-  log('   pipeline_data.xlsx   (sheet: "MK Pipeline")', 'dl-dim');
-  log('   panel_dates.xlsx     (sheet: "Sheet1", wide format — row 1: months, rows 2–3: Panel/Board Meeting dates)', 'dl-dim');
-  log('   task_definitions.json  (optional — defaults used if absent)', 'dl-dim');
+  log('   pipeline_data.xlsx      (sheet: "MK Pipeline")', 'dl-dim');
+  log('   panel_dates.xlsx        (sheet: "Sheet1", wide format)', 'dl-dim');
+  log('   task_definitions.xlsx   (optional — sheets: "Project Tasks" + "Routine Tasks")', 'dl-dim');
+  log('Also place xlsx.full.min.js alongside dashboard.html (not in the data folder).', 'dl-dim');
   </script>
 
 </body>
