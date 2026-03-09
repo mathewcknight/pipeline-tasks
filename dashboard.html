@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grant Pipeline Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f2f5;
+      color: #24292f;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #0d1117; }
+    .subtitle { font-size: 0.82rem; color: #6e7681; margin-bottom: 20px; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #0969da; color: #fff; }
+    .btn-secondary { background: #444c56; color: #fff; display: none; }
+    #status {
+      font-size: 0.82rem;
+      color: #57606a;
+      padding: 4px 0;
+    }
+
+    /* ── Alerts ── */
+    .alert {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      margin-bottom: 12px;
+    }
+    .alert-warn { background: #fff8c5; border: 1px solid #d4a72c; color: #7d4e00; }
+
+    /* ── Debug Panel ── */
+    #debugPanel {
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 18px 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      max-height: 75vh;
+      overflow-y: auto;
+      border: 1px solid #30363d;
+    }
+    .dl { margin: 0; }
+    .dl-section {
+      color: #58a6ff;
+      font-weight: bold;
+      margin: 12px 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.75rem;
+      border-top: 1px solid #21262d;
+      padding-top: 8px;
+    }
+    .dl-section:first-child { border-top: none; margin-top: 0; }
+    .dl-ok   { color: #3fb950; }
+    .dl-warn { color: #d29922; }
+    .dl-err  { color: #f85149; }
+    .dl-dim  { color: #8b949e; }
+    .dl-json {
+      color: #ce9178;
+      margin: 2px 0 4px 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Grant Pipeline Dashboard</h1>
+  <p class="subtitle">Stage 1 — Data Layer &amp; Debug Panel</p>
+
+  <div id="firefoxWarning" class="alert alert-warn" style="display:none">
+    ⚠️ Firefox does not fully support <code>showDirectoryPicker()</code>. Please use Chrome or Edge for full functionality.
+  </div>
+
+  <div class="controls">
+    <button id="btnSelectFolder" class="btn btn-primary">Select Dashboard Folder</button>
+    <button id="btnReload" class="btn btn-secondary">Reload Data</button>
+    <span id="status">No folder selected.</span>
+  </div>
+
+  <div id="debugPanel">
+    <div class="dl-dim">Waiting for folder selection…</div>
+  </div>
+
+  <!-- SheetJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CONSTANTS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const MK_NAME = 'Mathew Knight';
+  const LS_KEY  = 'pipeline_dashboard_state';
+
+  // Stage name → pipeline_data.xlsx column name
+  const STAGE_COLUMNS = {
+    'EOI Panel':           'Panel Month (EOI)',
+    'Prescreen':           'Pre-screen Date',
+    'Full App Panel':      'Panel Month (FA)',
+    'Funding Approval':    'Forecasted Application Approval Date',
+    'Approval to Execute': 'Forecasted Approval to Execute',
+  };
+
+  // Role detection order (first match wins)
+  const ROLE_COLUMNS = [
+    { col: 'Investment Analyst',             role: 'Analyst'           },
+    { col: 'Investment Analyst (Assisting)', role: 'Analyst Assisting' },
+    { col: 'Investment Manager',             role: 'Manager'           },
+  ];
+
+  // Default task definitions — used if task_definitions.json is absent.
+  // 3 tasks per stage × 5 stages = 15 tasks, covering all 3 role display labels.
+  // The `role` field is a display badge only — every task appears for every project.
+  const DEFAULT_TASKS = [
+    // ── EOI Panel ────────────────────────────────────────────────────────────
+    {
+      id: 'eoi_coi_form',
+      label: 'COI Form Submission',
+      role: 'Analyst',
+      stage: 'EOI Panel',
+      days_before: 28,
+    },
+    {
+      id: 'eoi_review_meeting',
+      label: 'EOI Review Meeting',
+      role: 'Manager',
+      stage: 'EOI Panel',
+      days_before: 14,
+    },
+    {
+      id: 'eoi_stakeholder_brief',
+      label: 'Stakeholder Briefing',
+      role: 'Analyst Assisting',
+      stage: 'EOI Panel',
+      days_before: 7,
+    },
+
+    // ── Prescreen ────────────────────────────────────────────────────────────
+    {
+      id: 'ps_doc_prep',
+      label: 'Prescreen Document Preparation',
+      role: 'Analyst',
+      stage: 'Prescreen',
+      days_before: 21,
+    },
+    {
+      id: 'ps_checklist_review',
+      label: 'Prescreen Checklist Review',
+      role: 'Manager',
+      stage: 'Prescreen',
+      days_before: 14,
+    },
+    {
+      id: 'ps_signoff',
+      label: 'Prescreen Sign-off',
+      role: 'Analyst Assisting',
+      stage: 'Prescreen',
+      days_before: 7,
+    },
+
+    // ── Full App Panel ───────────────────────────────────────────────────────
+    {
+      id: 'fa_app_review',
+      label: 'Full Application Review',
+      role: 'Analyst',
+      stage: 'Full App Panel',
+      days_before: 28,
+    },
+    {
+      id: 'fa_panel_prep',
+      label: 'Panel Preparation Meeting',
+      role: 'Manager',
+      stage: 'Full App Panel',
+      days_before: 14,
+    },
+    {
+      id: 'fa_final_check',
+      label: 'Application Final Check',
+      role: 'Analyst Assisting',
+      stage: 'Full App Panel',
+      days_before: 7,
+    },
+
+    // ── Funding Approval ─────────────────────────────────────────────────────
+    {
+      id: 'fund_approval_docs',
+      label: 'Funding Approval Documentation',
+      role: 'Analyst',
+      stage: 'Funding Approval',
+      days_before: 21,
+    },
+    {
+      id: 'fund_committee_prep',
+      label: 'Approval Committee Prep',
+      role: 'Manager',
+      stage: 'Funding Approval',
+      days_before: 14,
+    },
+    {
+      id: 'fund_applicant_comms',
+      label: 'Applicant Communications',
+      role: 'Analyst Assisting',
+      stage: 'Funding Approval',
+      days_before: 7,
+    },
+
+    // ── Approval to Execute ──────────────────────────────────────────────────
+    {
+      id: 'ate_agreement_review',
+      label: 'Execution Agreement Review',
+      role: 'Analyst',
+      stage: 'Approval to Execute',
+      days_before: 21,
+    },
+    {
+      id: 'ate_kickoff_prep',
+      label: 'Project Kickoff Preparation',
+      role: 'Analyst Assisting',
+      stage: 'Approval to Execute',
+      days_before: 14,
+    },
+    {
+      id: 'ate_contract_signoff',
+      label: 'Contract Sign-off',
+      role: 'Manager',
+      stage: 'Approval to Execute',
+      days_before: 7,
+    },
+  ];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // APP STATE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const appState = {
+    dirHandle:  null,
+    projects:   [],    // enriched project objects
+    taskDefs:   [],    // task definition array
+    allTasks:   [],    // flat generated task list
+    tickState:  {},    // { "key": true } from localStorage
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DEBUG PANEL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const debugEl = document.getElementById('debugPanel');
+
+  function clearDebug() {
+    debugEl.innerHTML = '';
+  }
+
+  function logSection(title) {
+    const el = document.createElement('div');
+    el.className = 'dl-section';
+    el.textContent = `▶  ${title}`;
+    debugEl.appendChild(el);
+  }
+
+  function log(text, cls = '') {
+    const el = document.createElement('div');
+    el.className = cls ? `dl ${cls}` : 'dl';
+    el.textContent = text;
+    debugEl.appendChild(el);
+    debugEl.scrollTop = debugEl.scrollHeight;
+  }
+
+  function logJSON(obj) {
+    const el = document.createElement('pre');
+    el.className = 'dl-json';
+    el.textContent = JSON.stringify(obj, null, 2);
+    debugEl.appendChild(el);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LOCALSTORAGE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function loadTickState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed.ticked || {};
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  function saveTickState() {
+    const payload = {
+      ticked: appState.tickState,
+      last_updated: new Date().toISOString(),
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  }
+
+  // Public: toggle a task tick and persist immediately
+  function setTick(key, value) {
+    if (value) {
+      appState.tickState[key] = true;
+    } else {
+      delete appState.tickState[key];
+    }
+    saveTickState();
+  }
+
+  function tickKey(projectName, stage, taskId) {
+    return `${projectName}__${stage}__${taskId}`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DATE UTILITIES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Convert an Excel serial number to a JS Date (handles the 1900 leap-year bug)
+  function excelSerialToDate(serial) {
+    const utcDays = Math.floor(serial - 25569);
+    return new Date(utcDays * 86400 * 1000);
+  }
+
+  // Coerce whatever SheetJS gives us (Date, number, string) into a JS Date
+  function coerceDate(val) {
+    if (!val && val !== 0) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'number') return excelSerialToDate(val);
+    if (typeof val === 'string' && val.trim()) {
+      const d = new Date(val.trim());
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  }
+
+  // Return "YYYY-MM" for a Date (used as lookup key — month-level precision)
+  function toMonthKey(date) {
+    if (!date) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  // Human-readable date string
+  function fmtDate(date) {
+    if (!date) return 'N/A';
+    return date.toLocaleDateString('en-AU', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+  }
+
+  function addDays(date, days) {
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FILE READING
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function getFile(name) {
+    try {
+      const fh = await appState.dirHandle.getFileHandle(name);
+      return fh.getFile();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function parseXLSX(file, sheetName) {
+    const ab = await file.arrayBuffer();
+    // cellDates:true so SheetJS converts date serials to JS Date where possible
+    const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) {
+      throw new Error(`Sheet "${sheetName}" not found in "${file.name}". Available: ${wb.SheetNames.join(', ')}`);
+    }
+    return XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+  }
+
+  async function parseJSONFile(file) {
+    const text = await file.text();
+    return JSON.parse(text);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PANEL DATE LOOKUP
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function buildPanelLookup(panelRows) {
+    // Key: "Stage Name||YYYY-MM"  →  actual Date
+    const lookup = {};
+    for (const row of panelRows) {
+      const stage  = (row['Stage'] || '').trim();
+      const month  = coerceDate(row['Month']);
+      const actual = coerceDate(row['Actual Date']);
+      if (!stage || !month || !actual) continue;
+      const key = `${stage}||${toMonthKey(month)}`;
+      lookup[key] = actual;
+    }
+    return lookup;
+  }
+
+  function resolveActualDate(stage, forecastDate, panelLookup) {
+    if (!forecastDate) return null;
+    const key = `${stage}||${toMonthKey(forecastDate)}`;
+    if (panelLookup[key]) return { date: panelLookup[key], source: 'panel_lookup' };
+    return { date: forecastDate, source: 'fallback' };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAIN DATA LOAD
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function loadAllData() {
+    clearDebug();
+    document.getElementById('status').textContent = 'Loading…';
+
+    // ── 1. File reading ───────────────────────────────────────────────────────
+    logSection('1. FILE READING');
+
+    const pipelineFile = await getFile('pipeline_data.xlsx');
+    if (!pipelineFile) {
+      log('✗ pipeline_data.xlsx — NOT FOUND in selected folder.', 'dl-err');
+      document.getElementById('status').textContent = 'Error: pipeline_data.xlsx not found.';
+      return;
+    }
+    log(`✓ pipeline_data.xlsx  (${(pipelineFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
+
+    const panelFile = await getFile('panel_dates.xlsx');
+    if (!panelFile) {
+      log('✗ panel_dates.xlsx — NOT FOUND in selected folder.', 'dl-err');
+      document.getElementById('status').textContent = 'Error: panel_dates.xlsx not found.';
+      return;
+    }
+    log(`✓ panel_dates.xlsx  (${(panelFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
+
+    const taskFile = await getFile('task_definitions.json');
+    let taskDefs;
+    if (!taskFile) {
+      log('⚠  task_definitions.json — not found. Using built-in placeholder tasks.', 'dl-warn');
+      taskDefs = DEFAULT_TASKS;
+    } else {
+      log(`✓ task_definitions.json  (${(taskFile.size / 1024).toFixed(1)} KB)`, 'dl-ok');
+      try {
+        taskDefs = await parseJSONFile(taskFile);
+        log(`   Loaded ${taskDefs.length} task definition(s) from file.`, 'dl-ok');
+      } catch (e) {
+        log(`⚠  Failed to parse task_definitions.json (${e.message}). Using defaults.`, 'dl-warn');
+        taskDefs = DEFAULT_TASKS;
+      }
+    }
+
+    // ── 2. Parse XLSX ─────────────────────────────────────────────────────────
+    logSection('2. PARSING XLSX');
+
+    let pipelineRows, panelRows;
+
+    try {
+      pipelineRows = await parseXLSX(pipelineFile, 'MK Pipeline');
+      log(`✓ pipeline_data.xlsx → "MK Pipeline":  ${pipelineRows.length} row(s)`, 'dl-ok');
+    } catch (e) {
+      log(`✗ ${e.message}`, 'dl-err');
+      return;
+    }
+
+    try {
+      panelRows = await parseXLSX(panelFile, 'Panel Dates');
+      log(`✓ panel_dates.xlsx → "Panel Dates":  ${panelRows.length} row(s)`, 'dl-ok');
+    } catch (e) {
+      log(`✗ ${e.message}`, 'dl-err');
+      return;
+    }
+
+    // ── 3. Panel date lookup table ────────────────────────────────────────────
+    logSection('3. PANEL DATE LOOKUP TABLE');
+
+    const panelLookup = buildPanelLookup(panelRows);
+    const lookupEntries = Object.entries(panelLookup);
+    log(`Built ${lookupEntries.length} panel date entries:`, 'dl-ok');
+    for (const [key, date] of lookupEntries) {
+      log(`   ${key}  →  ${fmtDate(date)}`, 'dl-dim');
+    }
+
+    // ── 4. Project parsing & role detection ───────────────────────────────────
+    logSection('4. PROJECT PARSING & ROLE DETECTION');
+
+    const projects = [];
+    let skipped = 0;
+
+    for (const row of pipelineRows) {
+      const name = (row['Project: Project Name'] || '').trim();
+      if (!name) continue;
+
+      // Detect MK's role (first match wins)
+      let role = null;
+      for (const { col, role: r } of ROLE_COLUMNS) {
+        if ((row[col] || '').trim() === MK_NAME) { role = r; break; }
+      }
+      if (!role) { skipped++; continue; }
+
+      // Resolve stage dates
+      const stageDates = {};
+      for (const [stageName, col] of Object.entries(STAGE_COLUMNS)) {
+        const raw = row[col];
+        if (!raw || raw === '') { stageDates[stageName] = null; continue; }
+
+        const forecastDate = coerceDate(raw);
+        if (!forecastDate) { stageDates[stageName] = null; continue; }
+
+        const resolved = resolveActualDate(stageName, forecastDate, panelLookup);
+        stageDates[stageName] = {
+          forecast: forecastDate,
+          actual:   resolved.date,
+          source:   resolved.source,
+        };
+      }
+
+      projects.push({
+        name,
+        role,
+        impactTeam:    row['Impact Team']    || '',
+        grantAmount:   row['Grant Amount']   || '',
+        fundingRound:  row['Funding Round']  || '',
+        stageDates,
+      });
+    }
+
+    log(
+      `Found ${projects.length} project(s) involving ${MK_NAME}` +
+      (skipped ? `  (${skipped} row(s) skipped — MK not listed)` : '') + ':',
+      'dl-ok',
+    );
+
+    for (const p of projects) {
+      log(`   [${p.role}]  ${p.name}`, 'dl-ok');
+      for (const [stage, sd] of Object.entries(p.stageDates)) {
+        if (!sd) { log(`      ${stage}:  — (no date)`, 'dl-dim'); continue; }
+        log(
+          `      ${stage}:  forecast=${fmtDate(sd.forecast)}` +
+          `  →  actual=${fmtDate(sd.actual)}  [${sd.source}]`,
+          'dl-dim',
+        );
+      }
+    }
+
+    // ── 5. Task generation ────────────────────────────────────────────────────
+    logSection('5. TASK GENERATION');
+
+    const allTasks = [];
+
+    for (const project of projects) {
+      for (const [stage, sd] of Object.entries(project.stageDates)) {
+        if (!sd || !sd.actual) continue;
+
+        const stageTasks = taskDefs.filter(t => t.stage === stage);
+        for (const td of stageTasks) {
+          const dueDate = addDays(sd.actual, -td.days_before);
+          allTasks.push({
+            projectName:      project.name,
+            projectRole:      project.role,
+            stage,
+            taskDef:          td,
+            dueDate,
+            actualStageDate:  sd.actual,
+            tickKey:          tickKey(project.name, stage, td.id),
+          });
+        }
+      }
+    }
+
+    log(`Generated ${allTasks.length} task(s) across ${projects.length} project(s):`, 'dl-ok');
+    for (const t of allTasks) {
+      const ticked = appState.tickState[t.tickKey] ? ' ✓' : '';
+      log(
+        `   [${t.projectName}]  ${t.stage}  /  ${t.taskDef.id}` +
+        `  →  due ${fmtDate(t.dueDate)}  (${t.taskDef.days_before}d before ${fmtDate(t.actualStageDate)})${ticked}`,
+        'dl-dim',
+      );
+    }
+
+    // ── 6. LocalStorage tick state ────────────────────────────────────────────
+    logSection('6. LOCALSTORAGE TICK STATE');
+
+    const tickedKeys = Object.keys(appState.tickState);
+    if (tickedKeys.length === 0) {
+      log('No existing tick state in localStorage.', 'dl-dim');
+    } else {
+      log(`Loaded ${tickedKeys.length} ticked task(s):`, 'dl-ok');
+      for (const k of tickedKeys) {
+        log(`   ✓  ${k}`, 'dl-dim');
+      }
+    }
+
+    // ── 7. Task definitions summary ───────────────────────────────────────────
+    logSection('7. TASK DEFINITIONS LOADED');
+
+    log(`${taskDefs.length} definition(s):`, 'dl-ok');
+    for (const td of taskDefs) {
+      log(
+        `   [${td.stage}]  ${td.id}:  "${td.label}"` +
+        `  |  role-badge=${td.role}  |  ${td.days_before}d before`,
+        'dl-dim',
+      );
+    }
+
+    // ── Store to appState ─────────────────────────────────────────────────────
+    appState.projects  = projects;
+    appState.taskDefs  = taskDefs;
+    appState.allTasks  = allTasks;
+
+    // ── Done ──────────────────────────────────────────────────────────────────
+    logSection('STAGE 1 COMPLETE');
+    log(
+      `✓ Data layer ready — ${projects.length} project(s), ` +
+      `${allTasks.length} task(s), ` +
+      `${tickedKeys.length} ticked.`,
+      'dl-ok',
+    );
+
+    document.getElementById('status').textContent =
+      `✓ Folder: ${appState.dirHandle.name}  |  ${projects.length} projects  |  ${allTasks.length} tasks`;
+    document.getElementById('btnReload').style.display = 'inline-block';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUTTON HANDLERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  document.getElementById('btnSelectFolder').addEventListener('click', async () => {
+    try {
+      appState.dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+      // Load tick state immediately after folder is picked
+      appState.tickState = loadTickState();
+      document.getElementById('status').textContent =
+        `Folder selected: ${appState.dirHandle.name} — loading…`;
+      await loadAllData();
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        clearDebug();
+        log(`✗ Error selecting folder: ${e.message}`, 'dl-err');
+      }
+    }
+  });
+
+  document.getElementById('btnReload').addEventListener('click', async () => {
+    if (!appState.dirHandle) {
+      log('No folder selected — use "Select Dashboard Folder" first.', 'dl-warn');
+      return;
+    }
+    appState.tickState = loadTickState();
+    await loadAllData();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Firefox / unsupported browser detection
+  if (typeof window.showDirectoryPicker !== 'function') {
+    document.getElementById('firefoxWarning').style.display = 'block';
+  }
+
+  // Render initial idle state
+  clearDebug();
+  log('Stage 1 ready. Click "Select Dashboard Folder" to begin.', 'dl-dim');
+  log('', '');
+  log('Expected files in the selected folder:', 'dl-dim');
+  log('   pipeline_data.xlsx   (sheet: "MK Pipeline")', 'dl-dim');
+  log('   panel_dates.xlsx     (sheet: "Panel Dates")', 'dl-dim');
+  log('   task_definitions.json  (optional — defaults used if absent)', 'dl-dim');
+  </script>
+
+</body>
+</html>
