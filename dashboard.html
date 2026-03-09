@@ -8,13 +8,13 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f2f5;
-      color: #24292f;
+      background: #0d1117;
+      color: #e6edf3;
       padding: 24px;
       min-height: 100vh;
     }
-    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #0d1117; }
-    .subtitle { font-size: 0.82rem; color: #6e7681; margin-bottom: 20px; }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #e6edf3; }
+    .subtitle { font-size: 0.82rem; color: #8b949e; margin-bottom: 20px; }
 
     /* ── Controls ── */
     .controls {
@@ -22,36 +22,163 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     .btn {
       padding: 8px 18px;
-      border: none;
+      border: 1px solid #30363d;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.88rem;
       font-weight: 500;
       transition: opacity .15s;
+      background: #21262d;
+      color: #e6edf3;
     }
-    .btn:hover { opacity: .85; }
-    .btn-primary { background: #0969da; color: #fff; }
-    .btn-secondary { background: #444c56; color: #fff; display: none; }
-    #status {
-      font-size: 0.82rem;
-      color: #57606a;
-      padding: 4px 0;
-    }
+    .btn:hover { opacity: .8; }
+    .btn-primary  { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    .btn-secondary { display: none; }
+    #status { font-size: 0.82rem; color: #8b949e; padding: 4px 0; }
 
     /* ── Alerts ── */
-    .alert {
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-size: 0.82rem;
-      margin-bottom: 12px;
-    }
-    .alert-warn { background: #fff8c5; border: 1px solid #d4a72c; color: #7d4e00; }
+    .alert { padding: 8px 14px; border-radius: 6px; font-size: 0.82rem; margin-bottom: 12px; }
+    .alert-warn { background: #2d2002; border: 1px solid #9e6a03; color: #e3b341; }
 
-    /* ── Debug Panel ── */
+    /* ── Section label ── */
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8b949e;
+      margin-bottom: 10px;
+    }
+
+    /* ══ Timeline ══════════════════════════════════════════════════════════════ */
+    #timeline { margin-bottom: 24px; }
+
+    .tl-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+    .tl-table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+      background: #161b22;
+      table-layout: fixed;
+    }
+
+    /* Header */
+    .tl-th-label {
+      width: 210px;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .tl-th-month {
+      padding: 10px 12px;
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #21262d;
+    }
+    .tl-th-month:last-child { border-right: none; }
+    .tl-th-month.tl-cur { color: #58a6ff; background: #0d1f36; border-bottom: 2px solid #1f6feb; }
+
+    /* Rows */
+    .tl-row { border-bottom: 1px solid #21262d; }
+    .tl-row:last-child { border-bottom: none; }
+    .tl-row:hover .tl-label,
+    .tl-row:hover .tl-cell         { background: #1c2128; }
+    .tl-row:hover .tl-cell.tl-cur-col { background: #102030; }
+
+    .tl-label {
+      padding: 10px 12px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      vertical-align: top;
+    }
+    .tl-label-inner { display: flex; flex-direction: column; gap: 5px; }
+    .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; }
+    .tl-role-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: 1px solid;
+      align-self: flex-start;
+      white-space: nowrap;
+    }
+
+    .tl-cell {
+      padding: 8px 10px;
+      background: #161b22;
+      vertical-align: top;
+      border-right: 1px solid #21262d;
+    }
+    .tl-cell:last-child { border-right: none; }
+    .tl-cell.tl-cur-col { background: #0c1c2e; }
+
+    /* Stage assessment markers */
+    .tl-stage-marker {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+    .tl-diamond { font-size: 0.6rem; flex-shrink: 0; }
+    .tl-stage-date {
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: auto;
+      padding-left: 6px;
+      font-size: 0.67rem;
+    }
+
+    /* Task chips */
+    .tl-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+    .tl-task-chip {
+      display: block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.64rem;
+      border-left: 2px solid;
+      background: rgba(255,255,255,0.03);
+      color: #8b949e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tl-task-chip.tl-ticked { opacity: 0.35; text-decoration: line-through; }
+
+    /* ══ Debug Panel ═══════════════════════════════════════════════════════════ */
     #debugPanel {
       background: #0d1117;
       color: #c9d1d9;
@@ -60,7 +187,7 @@
       font-family: 'Courier New', Courier, monospace;
       font-size: 0.78rem;
       line-height: 1.6;
-      max-height: 75vh;
+      max-height: 60vh;
       overflow-y: auto;
       border: 1px solid #30363d;
     }
@@ -91,7 +218,7 @@
 <body>
 
   <h1>Grant Pipeline Dashboard</h1>
-  <p class="subtitle">Stage 1 — Data Layer &amp; Debug Panel</p>
+  <p class="subtitle">Mathew Knight — Grant Pipeline Manager</p>
 
   <div id="firefoxWarning" class="alert alert-warn" style="display:none">
     ⚠️ Firefox does not fully support <code>showDirectoryPicker()</code>. Please use Chrome or Edge for full functionality.
@@ -103,6 +230,11 @@
     <span id="status">No folder selected.</span>
   </div>
 
+  <!-- Timeline (hidden until data loads) -->
+  <div id="timeline" style="display:none"></div>
+
+  <!-- Debug panel -->
+  <p class="section-label" style="margin-top:8px">Debug &amp; Data Log</p>
   <div id="debugPanel">
     <div class="dl-dim">Waiting for folder selection…</div>
   </div>
@@ -148,6 +280,22 @@
     january: '01', february: '02', march:    '03', april:    '04',
     may:     '05', june:     '06', july:     '07', august:   '08',
     september: '09', october: '10', november: '11', december: '12',
+  };
+
+  // Stage chip colours — dark bg tones with matching text/border for dark theme
+  const STAGE_COLORS = {
+    'EOI Panel':           { bg: '#451a03', text: '#fde68a', border: '#d97706' },
+    'Prescreen':           { bg: '#431407', text: '#fed7aa', border: '#ea580c' },
+    'Full App Panel':      { bg: '#0c3344', text: '#a5f3fc', border: '#0891b2' },
+    'Funding Approval':    { bg: '#052e16', text: '#bbf7d0', border: '#16a34a' },
+    'Approval to Execute': { bg: '#2e1065', text: '#e9d5ff', border: '#7c3aed' },
+  };
+
+  // Role badge colours
+  const ROLE_COLORS = {
+    'Analyst':           { bg: '#1e3a5f', text: '#bfdbfe', border: '#3b82f6' },
+    'Analyst Assisting': { bg: '#3b1d6e', text: '#e9d5ff', border: '#a855f7' },
+    'Manager':           { bg: '#134e4a', text: '#99f6e4', border: '#14b8a6' },
   };
 
   // Default task definitions — used if task_definitions.json is absent.
@@ -393,6 +541,127 @@
     const d = new Date(date.getTime());
     d.setDate(d.getDate() + days);
     return d;
+  }
+
+  // Short date: "18 Mar"
+  function fmtDateShort(date) {
+    if (!date) return '';
+    return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+  }
+
+  // HTML-escape a string
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Truncate with ellipsis
+  function truncate(str, n) {
+    return str.length > n ? str.slice(0, n - 1) + '…' : str;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIMELINE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Returns the 4-month window: [prev, current, next, next+1]
+  function getTimelineMonths() {
+    const now = new Date();
+    const result = [];
+    for (let offset = -1; offset <= 2; offset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      result.push({
+        key:       toMonthKey(d),
+        label:     d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
+        isCurrent: offset === 0,
+      });
+    }
+    return result;
+  }
+
+  function renderTimeline() {
+    const container = document.getElementById('timeline');
+    if (!appState.projects.length) { container.style.display = 'none'; return; }
+
+    const months = getTimelineMonths();
+
+    // ── Table header ──────────────────────────────────────────────────────────
+    let html = '<p class="section-label">Pipeline Timeline</p><div class="tl-wrap"><table class="tl-table"><thead><tr>';
+    html += '<th class="tl-th-label">Project</th>';
+    for (const m of months) {
+      html += `<th class="tl-th-month${m.isCurrent ? ' tl-cur' : ''}">${esc(m.label)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    // ── One row per project ───────────────────────────────────────────────────
+    for (const project of appState.projects) {
+      const rc = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
+      html += '<tr class="tl-row">';
+
+      // Label cell (sticky)
+      html += `
+        <td class="tl-label">
+          <div class="tl-label-inner">
+            <span class="tl-project-name" title="${esc(project.name)}">${esc(truncate(project.name, 30))}</span>
+            <span class="tl-role-badge"
+              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(project.role)}
+            </span>
+          </div>
+        </td>`;
+
+      // Month cells
+      for (const m of months) {
+        html += `<td class="tl-cell${m.isCurrent ? ' tl-cur-col' : ''}">`;
+
+        // Stage assessment markers — sorted by actual date
+        const stagesInMonth = Object.entries(project.stageDates)
+          .filter(([, sd]) => sd && toMonthKey(sd.actual) === m.key)
+          .sort(([, a], [, b]) => a.actual - b.actual);
+
+        for (const [stage, sd] of stagesInMonth) {
+          const sc = STAGE_COLORS[stage];
+          html += `
+            <div class="tl-stage-marker"
+              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+              <span class="tl-diamond">◆</span>
+              <span>${esc(stage)}</span>
+              <span class="tl-stage-date">${fmtDateShort(sd.actual)}</span>
+            </div>`;
+        }
+
+        // Task chips — sorted by due date
+        const tasksInMonth = appState.allTasks
+          .filter(t => t.projectName === project.name && toMonthKey(t.dueDate) === m.key)
+          .sort((a, b) => a.dueDate - b.dueDate);
+
+        if (tasksInMonth.length) {
+          html += '<div class="tl-tasks">';
+          for (const t of tasksInMonth) {
+            const sc     = STAGE_COLORS[t.stage];
+            const ticked = appState.tickState[t.tickKey];
+            html += `
+              <div class="tl-task-chip${ticked ? ' tl-ticked' : ''}"
+                style="border-color:${sc.border}"
+                title="${esc(t.taskDef.label)} — due ${fmtDate(t.dueDate)}">
+                ${esc(truncate(t.taskDef.label, 24))}
+              </div>`;
+          }
+          html += '</div>';
+        }
+
+        html += '</td>';
+      }
+
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    container.style.display = 'block';
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -711,8 +980,11 @@
     appState.taskDefs  = taskDefs;
     appState.allTasks  = allTasks;
 
+    // ── Render timeline ───────────────────────────────────────────────────────
+    renderTimeline();
+
     // ── Done ──────────────────────────────────────────────────────────────────
-    logSection('STAGE 1 COMPLETE');
+    logSection('DATA LOAD COMPLETE');
     log(
       `✓ Data layer ready — ${projects.length} project(s), ` +
       `${allTasks.length} task(s), ` +
