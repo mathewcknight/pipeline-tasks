@@ -509,13 +509,33 @@
     return new Date(utcDays * 86400 * 1000);
   }
 
-  // Coerce whatever SheetJS gives us (Date, number, string) into a JS Date
+  // Coerce whatever SheetJS gives us (Date, number, string) into a JS Date.
+  // Handles Australian DD/MM/YYYY and DD/MM/YY text strings explicitly — new Date()
+  // parses slashed dates as MM/DD (US), which misreads AU dates into January.
   function coerceDate(val) {
     if (!val && val !== 0) return null;
     if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
     if (typeof val === 'number') return excelSerialToDate(val);
     if (typeof val === 'string' && val.trim()) {
-      const d = new Date(val.trim());
+      const s = val.trim();
+
+      // DD/MM/YYYY  e.g. "01/04/2026" → 1 April 2026
+      const dmy4 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (dmy4) {
+        const d = new Date(+dmy4[3], +dmy4[2] - 1, +dmy4[1]);
+        if (!isNaN(d.getTime())) return d;
+      }
+
+      // DD/MM/YY  e.g. "01/04/26" → 1 April 2026  (00-49 → 2000s, 50-99 → 1900s)
+      const dmy2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+      if (dmy2) {
+        const yr = +dmy2[3] >= 50 ? 1900 + +dmy2[3] : 2000 + +dmy2[3];
+        const d  = new Date(yr, +dmy2[2] - 1, +dmy2[1]);
+        if (!isNaN(d.getTime())) return d;
+      }
+
+      // Fall back to native parsing (handles ISO 8601, "Month YYYY", etc.)
+      const d = new Date(s);
       return isNaN(d.getTime()) ? null : d;
     }
     return null;
