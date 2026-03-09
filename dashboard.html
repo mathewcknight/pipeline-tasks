@@ -114,7 +114,7 @@
     }
     .tl-table {
       width: 100%;
-      min-width: 900px;
+      min-width: 1050px;
       border-collapse: collapse;
       background: #161b22;
       table-layout: fixed;
@@ -122,7 +122,7 @@
 
     /* Header */
     .tl-th-label {
-      width: 250px;
+      width: 375px;
       padding: 8px 12px;
       text-align: left;
       font-size: 0.72rem;
@@ -167,7 +167,7 @@
       vertical-align: middle;
     }
     .tl-label-inner { display: flex; flex-direction: row; align-items: center; gap: 7px; flex-wrap: wrap; }
-    .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; }
+    .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; word-break: break-word; white-space: normal; }
     .tl-role-badge {
       display: inline-block;
       padding: 1px 6px;
@@ -629,7 +629,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v5.1';
+  const VERSION = 'v6.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -643,12 +643,16 @@
     'Approval to Execute': 'Forecasted Approval to Execute',
   };
 
-  // Role detection order (first match wins)
+  // Role detection — all matching columns are checked; highest priority wins.
+  // Priority: Manager (3) > Analyst (2) > Analyst Assisting (1).
+  // Column keys are matched after trimming whitespace from the spreadsheet header,
+  // which prevents mismatches caused by trailing spaces in the XLSX.
   const ROLE_COLUMNS = [
     { col: 'Investment Analyst',             role: 'Analyst'           },
     { col: 'Investment Analyst (Assisting)', role: 'Analyst Assisting' },
     { col: 'Investment Manager',             role: 'Manager'           },
   ];
+  const ROLE_PRIORITY = { 'Manager': 3, 'Analyst': 2, 'Analyst Assisting': 1 };
 
   // Which panel_dates.xlsx event type to look up for each stage
   const STAGE_EVENT_TYPE = {
@@ -1003,6 +1007,24 @@
     return result;
   }
 
+  // Sort projects by when they next have activity visible in the timeline window.
+  // Bucket 0 = something in the current month; 1 = next month; 2 = month after; 3 = no activity.
+  function getProjectActivityBucket(project) {
+    const months  = getTimelineMonths(); // [prev, current, next, next+1]
+    const curKey  = months[1].key;
+    const nextKey = months[2].key;
+    const aftKey  = months[3].key;
+    const hasIn = key => Object.values(project.stageDates).some(sd => sd && toMonthKey(sd.actual) === key);
+    if (hasIn(curKey))  return 0;
+    if (hasIn(nextKey)) return 1;
+    if (hasIn(aftKey))  return 2;
+    return 3;
+  }
+
+  function getSortedProjects() {
+    return [...appState.projects].sort((a, b) => getProjectActivityBucket(a) - getProjectActivityBucket(b));
+  }
+
   function renderTimeline() {
     const container = document.getElementById('timeline');
     if (!appState.projects.length) { container.style.display = 'none'; return; }
@@ -1017,8 +1039,8 @@
     }
     html += '</tr></thead><tbody>';
 
-    // ── One row per project ───────────────────────────────────────────────────
-    for (const project of appState.projects) {
+    // ── One row per project (sorted by activity month) ───────────────────────
+    for (const project of getSortedProjects()) {
       const rc = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
       html += '<tr class="tl-row">';
 
@@ -1026,7 +1048,7 @@
       html += `
         <td class="tl-label">
           <div class="tl-label-inner">
-            <span class="tl-project-name" title="${esc(project.name)}">${esc(truncate(project.name, 34))}</span>
+            <span class="tl-project-name">${esc(project.name)}</span>
             <span class="tl-role-badge"
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
               ${esc(project.role)}
@@ -1055,26 +1077,6 @@
               <span>${esc(stageLabel)}</span>
               <span class="tl-stage-date">${fmtDateShort(sd.actual)}</span>
             </div>`;
-        }
-
-        // Task chips — sorted by due date
-        const tasksInMonth = appState.allTasks
-          .filter(t => t.projectName === project.name && toMonthKey(t.dueDate) === m.key)
-          .sort((a, b) => a.dueDate - b.dueDate);
-
-        if (tasksInMonth.length) {
-          html += '<div class="tl-tasks">';
-          for (const t of tasksInMonth) {
-            const sc     = STAGE_COLORS[t.stage];
-            const ticked = appState.tickState[t.tickKey];
-            html += `
-              <div class="tl-task-chip${ticked ? ' tl-ticked' : ''}"
-                style="border-color:${sc.border}"
-                title="${esc(t.taskDef.label)} — due ${fmtDate(t.dueDate)}">
-                ${esc(truncate(t.taskDef.label, 24))}
-              </div>`;
-          }
-          html += '</div>';
         }
 
         html += '</td>';
@@ -1323,10 +1325,18 @@
       const name = (row['Project: Project Name'] || '').trim();
       if (!name) continue;
 
-      // Detect MK's role (first match wins)
+      // Detect MK's role — check all role columns, pick highest-priority match.
+      // Column keys are compared after trimming to handle XLSX header whitespace.
+      const rowNorm = {};
+      for (const [k, v] of Object.entries(row)) rowNorm[k.trim()] = v;
+
       let role = null;
+      let rolePri = 0;
       for (const { col, role: r } of ROLE_COLUMNS) {
-        if ((row[col] || '').trim() === MK_NAME) { role = r; break; }
+        if ((rowNorm[col] || '').trim() === MK_NAME) {
+          const p = ROLE_PRIORITY[r] || 0;
+          if (p > rolePri) { role = r; rolePri = p; }
+        }
       }
       if (!role) { skipped++; continue; }
 
@@ -1384,6 +1394,10 @@
     // ── 5. Task generation ────────────────────────────────────────────────────
     logSection('5. TASK GENERATION');
 
+    // Tasks due more than 3 months before today are stale — skip them.
+    const threeMonthsAgo = addDays(new Date(), -90);
+    threeMonthsAgo.setHours(0, 0, 0, 0);
+
     const allTasks = [];
 
     for (const project of projects) {
@@ -1415,6 +1429,11 @@
         const stageTasks = taskDefs.filter(t => t.stage === stage);
         for (const td of stageTasks) {
           const dueDate = addDays(sd.actual, -td.days_before);
+          // Skip tasks that are stale (due more than 3 months ago)
+          if (dueDate < threeMonthsAgo) {
+            log(`      ↳ skipped stale task "${td.id}" for "${project.name}" / ${stage} — due ${fmtDate(dueDate)}`, 'dl-dim');
+            continue;
+          }
           allTasks.push({
             projectName:      project.name,
             projectRole:      project.role,
@@ -1550,9 +1569,9 @@
     const select   = document.getElementById('projectSelect');
     const prevVal  = select.value;
 
-    // Rebuild option list preserving the previous selection
+    // Rebuild option list preserving the previous selection (same sort as timeline)
     select.innerHTML = '<option value="">— Select a project —</option>';
-    for (const p of appState.projects) {
+    for (const p of getSortedProjects()) {
       const opt = document.createElement('option');
       opt.value       = p.name;
       opt.textContent = p.name;
@@ -1595,7 +1614,7 @@
       for (const t of stageTasks) {
         const ticked  = !!appState.tickState[t.tickKey];
         const urgency = ticked ? '' : dateUrgency(t.dueDate);
-        const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+        const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
 
         let rowClass = 'cl-task-row';
         if (ticked)              rowClass += ' cl-ticked';
@@ -1617,7 +1636,7 @@
             <span class="cl-due-date">${fmtDate(t.dueDate)}</span>
             <span class="cl-role-badge"
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.taskDef.role)}
+              ${esc(t.projectRole)}
             </span>
           </div>`;
       }
@@ -1688,7 +1707,7 @@
 
     for (const t of tasks) {
       const sc      = STAGE_COLORS[t.stage];
-      const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+      const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
       const urgency = dateUrgency(t.dueDate);
       const rowCls  = urgency ? ` cl-${urgency}` : '';
 
@@ -1705,7 +1724,7 @@
           <td class="ot-td">
             <span class="cl-role-badge"
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.taskDef.role)}
+              ${esc(t.projectRole)}
             </span>
           </td>
           <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
