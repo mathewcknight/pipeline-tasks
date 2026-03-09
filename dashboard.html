@@ -563,6 +563,99 @@
       font-size: 0.88rem;
       font-weight: 500;
     }
+
+    /* ══ Modals (shared) ════════════════════════════════════════════════════════ */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 26px 28px;
+      width: 460px;
+      max-width: 95vw;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    }
+    .modal-title {
+      font-size: 0.96rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 20px;
+    }
+    .modal-field { margin-bottom: 14px; }
+    .modal-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+    .modal-input, .modal-select {
+      width: 100%;
+      background: #0d1117;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.88rem;
+      font-family: inherit;
+    }
+    .modal-input:focus, .modal-select:focus { outline: none; border-color: #388bfd; }
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 22px;
+    }
+    .modal-body-text { font-size: 0.88rem; color: #c9d1d9; line-height: 1.6; margin-bottom: 6px; }
+    .btn-icon {
+      padding: 2px 9px;
+      background: transparent;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #58a6ff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1.4;
+    }
+    .btn-icon:hover { background: #21262d; }
+    .btn-danger { background: #3d0d0d; border-color: #f85149; color: #ffa0a0; }
+    .btn-danger:hover { opacity: 0.85; }
+    /* Custom-task badge (small "custom" indicator on task rows) */
+    .custom-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      background: #1c2d40;
+      color: #58a6ff;
+      border: 1px solid #1f6feb;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    /* Delete button for custom tasks */
+    .btn-delete-task {
+      background: transparent;
+      border: none;
+      color: #6e7681;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .btn-delete-task:hover { color: #f85149; background: rgba(248,81,73,0.1); }
   </style>
 </head>
 <body>
@@ -577,6 +670,7 @@
   <div class="controls">
     <button id="btnSelectFolder" class="btn btn-primary">Select Dashboard Folder</button>
     <button id="btnReload" class="btn btn-secondary">Reload Data</button>
+    <button id="btnClearData" class="btn btn-secondary" style="display:none">Clear Saved Data</button>
     <span id="status">No folder selected.</span>
   </div>
 
@@ -604,6 +698,7 @@
       <div class="panel-header">
         <p class="section-label">All Open Tasks</p>
         <span id="openTaskCount" class="count-badge"></span>
+        <button id="btnAddTask" class="btn-icon" title="Add a custom task">+</button>
       </div>
       <div class="ot-scroll">
         <div id="openTasksList"></div>
@@ -619,6 +714,60 @@
   </div>
   <div id="debugPanel" style="display:none">
     <div class="dl-dim">Waiting for folder selection…</div>
+  </div>
+
+  <!-- Custom task modal -->
+  <div id="customTaskModal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="ctModalTitle">
+    <div class="modal-box">
+      <div class="modal-title" id="ctModalTitle">Add Custom Task</div>
+      <div class="modal-field">
+        <label class="modal-label" for="ctProject">Project</label>
+        <select id="ctProject" class="modal-select"></select>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="ctStage">Stage</label>
+        <select id="ctStage" class="modal-select">
+          <option value="EOI Panel">EOI Panel</option>
+          <option value="Prescreen">Prescreen</option>
+          <option value="Full App Panel">Full App Panel</option>
+          <option value="Funding Approval">Funding Approval</option>
+          <option value="Approval to Execute">Approval to Execute</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="ctLabel">Task Name</label>
+        <input id="ctLabel" type="text" class="modal-input" placeholder="e.g. Review draft report" maxlength="120">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="ctDueDate">Due Date</label>
+        <input id="ctDueDate" type="date" class="modal-input">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="ctRole">Usual Task Owner</label>
+        <select id="ctRole" class="modal-select">
+          <option value="Analyst">Analyst</option>
+          <option value="Analyst Assisting">Analyst Assisting</option>
+          <option value="Manager">Manager</option>
+        </select>
+      </div>
+      <div class="modal-buttons">
+        <button type="button" class="btn" id="ctCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="ctSave">Add Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clear saved data confirmation modal -->
+  <div id="clearDataModal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="clearModalTitle">
+    <div class="modal-box">
+      <div class="modal-title" id="clearModalTitle">Clear All Saved Data?</div>
+      <p class="modal-body-text">This will permanently delete all ticked task state and any custom tasks you have added. The page will reload so you can select your folder again.</p>
+      <p class="modal-body-text" style="color:#f85149;margin-top:6px;font-weight:500">This action cannot be undone.</p>
+      <div class="modal-buttons">
+        <button type="button" class="btn" id="clearDataCancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="clearDataConfirm">Yes, clear everything</button>
+      </div>
+    </div>
   </div>
 
   <!-- SheetJS -->
@@ -828,11 +977,13 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   const appState = {
-    dirHandle:  null,
-    projects:   [],    // enriched project objects
-    taskDefs:   [],    // task definition array
-    allTasks:   [],    // flat generated task list
-    tickState:  {},    // { "key": true } from localStorage
+    dirHandle:    null,
+    projects:     [],    // enriched project objects
+    taskDefs:     [],    // task definition array
+    allTasks:     [],    // flat generated task list
+    tickState:    {},    // { "key": true } from localStorage
+    customTasks:  [],    // user-created task records persisted to localStorage
+    prevDueDates: {},    // { tickKey: "YYYY-MM-DD" } from last save — used to detect date shifts
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -871,20 +1022,36 @@
   // LOCALSTORAGE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function loadTickState() {
+  // Load full persisted state into appState (tick state, custom tasks, previous due dates).
+  function loadState() {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return parsed.ticked || {};
+        appState.tickState    = parsed.ticked      || {};
+        appState.customTasks  = parsed.customTasks || [];
+        appState.prevDueDates = parsed.dueDates    || {};
+        return;
       }
     } catch (_) {}
-    return {};
+    appState.tickState    = {};
+    appState.customTasks  = [];
+    appState.prevDueDates = {};
   }
 
-  function saveTickState() {
+  // Persist full state: tick state, custom tasks, and current task due dates.
+  function saveState() {
+    // Snapshot due dates of all generated (non-custom) tasks
+    const dueDates = {};
+    for (const t of appState.allTasks) {
+      if (!t.isCustom) {
+        dueDates[t.tickKey] = t.dueDate.toISOString().split('T')[0];
+      }
+    }
     const payload = {
-      ticked: appState.tickState,
+      ticked:       appState.tickState,
+      customTasks:  appState.customTasks,
+      dueDates,
       last_updated: new Date().toISOString(),
     };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -897,7 +1064,15 @@
     } else {
       delete appState.tickState[key];
     }
-    saveTickState();
+    saveState();
+  }
+
+  // Delete a custom task by tickKey — removes from customTasks, allTasks, and tick state.
+  function deleteCustomTask(tickKeyVal) {
+    appState.customTasks = appState.customTasks.filter(ct => tickKey(ct.projectName, ct.stage, ct.id) !== tickKeyVal);
+    appState.allTasks    = appState.allTasks.filter(t => t.tickKey !== tickKeyVal);
+    delete appState.tickState[tickKeyVal];
+    saveState();
   }
 
   function tickKey(projectName, stage, taskId) {
@@ -1447,14 +1622,58 @@
       }
     }
 
-    log(`Generated ${allTasks.length} task(s) across ${projects.length} project(s):`, 'dl-ok');
+    // ── 5b. Add custom tasks to allTasks ─────────────────────────────────────
+    for (const ct of appState.customTasks) {
+      const project = projects.find(p => p.name === ct.projectName);
+      if (!project) continue; // project no longer in pipeline data
+      const dueDate = new Date(ct.dueDate);
+      if (isNaN(dueDate.getTime())) continue;
+      if (dueDate < threeMonthsAgo) continue; // apply same stale cutoff
+      allTasks.push({
+        projectName:     ct.projectName,
+        projectRole:     project.role,
+        stage:           ct.stage,
+        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0 },
+        dueDate,
+        actualStageDate: null,
+        tickKey:         tickKey(ct.projectName, ct.stage, ct.id),
+        isCustom:        true,
+      });
+    }
+
+    log(`Generated ${allTasks.length} task(s) across ${projects.length} project(s) (incl. ${appState.customTasks.length} custom):`, 'dl-ok');
     for (const t of allTasks) {
       const ticked = appState.tickState[t.tickKey] ? ' ✓' : '';
       log(
         `   [${t.projectName}]  ${t.stage}  /  ${t.taskDef.id}` +
-        `  →  due ${fmtDate(t.dueDate)}  (${t.taskDef.days_before}d before ${fmtDate(t.actualStageDate)})${ticked}`,
+        `  →  due ${fmtDate(t.dueDate)}` +
+        (t.isCustom ? '  [custom]' : `  (${t.taskDef.days_before}d before ${fmtDate(t.actualStageDate)})`) +
+        ticked,
         'dl-dim',
       );
+    }
+
+    // ── 5c. Date-shift detection ───────────────────────────────────────────────
+    logSection('5c. DATE SHIFT DETECTION');
+    let shiftCount = 0;
+    for (const t of allTasks) {
+      if (t.isCustom) continue; // custom tasks have explicit user-set dates
+      const oldDateStr = appState.prevDueDates[t.tickKey];
+      const newDateStr = t.dueDate.toISOString().split('T')[0];
+      if (oldDateStr && oldDateStr !== newDateStr) {
+        const oldDate = new Date(oldDateStr);
+        log(
+          `[DATE SHIFT]  ${t.projectName} / ${t.stage} / ${t.taskDef.id}:` +
+          `  ${fmtDate(oldDate)} → ${fmtDate(t.dueDate)}`,
+          'dl-warn',
+        );
+        shiftCount++;
+      }
+    }
+    if (shiftCount === 0) {
+      log('No due-date shifts detected since last load.', 'dl-dim');
+    } else {
+      log(`${shiftCount} due-date shift(s) detected — tick state preserved.`, 'dl-warn');
     }
 
     // ── 6. LocalStorage tick state ────────────────────────────────────────────
@@ -1541,7 +1760,11 @@
 
     document.getElementById('status').textContent =
       `✓ Folder: ${appState.dirHandle.name}  |  ${projects.length} projects  |  ${allTasks.length} tasks`;
-    document.getElementById('btnReload').style.display = 'inline-block';
+    document.getElementById('btnReload').style.display   = 'inline-block';
+    document.getElementById('btnClearData').style.display = 'inline-block';
+
+    // Persist fresh due dates so next reload can detect shifts
+    saveState();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1614,7 +1837,7 @@
       for (const t of stageTasks) {
         const ticked  = !!appState.tickState[t.tickKey];
         const urgency = ticked ? '' : dateUrgency(t.dueDate);
-        const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
+        const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
 
         let rowClass = 'cl-task-row';
         if (ticked)              rowClass += ' cl-ticked';
@@ -1628,15 +1851,21 @@
                 data-project="${esc(projectName)}"
                 ${ticked ? 'checked' : ''}>
             </label>
-            <span class="cl-task-label${ticked ? ' cl-ticked-text' : ''}">${esc(t.taskDef.label)}</span>
+            <span class="cl-task-label${ticked ? ' cl-ticked-text' : ''}">
+              ${esc(t.taskDef.label)}
+              ${t.isCustom ? '<span class="custom-badge" style="margin-left:5px">custom</span>' : ''}
+            </span>
             <span class="cl-stage-chip-sm"
               style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
               ${esc(stage)}
             </span>
             <span class="cl-due-date">${fmtDate(t.dueDate)}</span>
-            <span class="cl-role-badge"
-              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.projectRole)}
+            <span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <span class="cl-role-badge"
+                style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+                ${esc(t.taskDef.role)}
+              </span>
+              ${t.isCustom ? `<button class="btn-delete-task cl-delete-custom" data-tick-key="${esc(t.tickKey)}" data-project="${esc(projectName)}" title="Delete custom task">✕</button>` : ''}
             </span>
           </div>`;
       }
@@ -1657,6 +1886,18 @@
         const key     = e.target.dataset.tickKey;
         const project = e.target.dataset.project;
         setTick(key, e.target.checked);
+        renderChecklistTasks(project);
+        renderOpenTasks();
+        renderTimeline();
+      });
+    });
+
+    // Attach delete listeners for custom tasks
+    container.querySelectorAll('.cl-delete-custom').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const key     = e.target.dataset.tickKey;
+        const project = e.target.dataset.project;
+        deleteCustomTask(key);
         renderChecklistTasks(project);
         renderOpenTasks();
         renderTimeline();
@@ -1692,22 +1933,23 @@
       return;
     }
 
-    // Col widths: project | stage | label | role | due | tick
+    // Col widths: project | stage | task | usual-owner | due | tick | delete
     let html = `
       <table class="ot-table">
         <thead><tr>
           <th class="ot-th" style="width:18%">Project</th>
           <th class="ot-th" style="width:15%">Stage</th>
           <th class="ot-th">Task</th>
-          <th class="ot-th" style="width:13%">Role</th>
+          <th class="ot-th" style="width:13%">Usual Task Owner</th>
           <th class="ot-th" style="width:90px;text-align:right">Due</th>
           <th class="ot-th" style="width:36px;text-align:center">✓</th>
+          <th class="ot-th" style="width:28px"></th>
         </tr></thead>
         <tbody>`;
 
     for (const t of tasks) {
       const sc      = STAGE_COLORS[t.stage];
-      const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
+      const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
       const urgency = dateUrgency(t.dueDate);
       const rowCls  = urgency ? ` cl-${urgency}` : '';
 
@@ -1720,11 +1962,14 @@
               ${esc(t.stage)}
             </span>
           </td>
-          <td class="ot-td" title="${esc(t.taskDef.label)}">${esc(t.taskDef.label)}</td>
+          <td class="ot-td" title="${esc(t.taskDef.label)}">
+            ${esc(t.taskDef.label)}
+            ${t.isCustom ? '<span class="custom-badge" style="margin-left:4px">custom</span>' : ''}
+          </td>
           <td class="ot-td">
             <span class="cl-role-badge"
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.projectRole)}
+              ${esc(t.taskDef.role)}
             </span>
           </td>
           <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
@@ -1732,6 +1977,11 @@
             <input type="checkbox" class="ot-checkbox"
               data-tick-key="${esc(t.tickKey)}"
               data-project="${esc(t.projectName)}">
+          </td>
+          <td class="ot-td" style="padding:4px 2px">
+            ${t.isCustom
+              ? `<button class="btn-delete-task ot-delete-custom" data-tick-key="${esc(t.tickKey)}" data-project="${esc(t.projectName)}" title="Delete custom task">✕</button>`
+              : ''}
           </td>
         </tr>`;
     }
@@ -1754,6 +2004,19 @@
         }
       });
     });
+
+    // Delete listeners for custom tasks
+    listEl.querySelectorAll('.ot-delete-custom').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const key     = e.target.dataset.tickKey;
+        const project = e.target.dataset.project;
+        deleteCustomTask(key);
+        renderOpenTasks();
+        renderTimeline();
+        const selectedProject = document.getElementById('projectSelect').value;
+        if (selectedProject === project) renderChecklistTasks(project);
+      });
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1763,8 +2026,8 @@
   document.getElementById('btnSelectFolder').addEventListener('click', async () => {
     try {
       appState.dirHandle = await window.showDirectoryPicker({ mode: 'read' });
-      // Load tick state immediately after folder is picked
-      appState.tickState = loadTickState();
+      // Load persisted state immediately after folder is picked
+      loadState();
       document.getElementById('status').textContent =
         `Folder selected: ${appState.dirHandle.name} — loading…`;
       await loadAllData();
@@ -1781,7 +2044,7 @@
       log('No folder selected — use "Select Dashboard Folder" first.', 'dl-warn');
       return;
     }
-    appState.tickState = loadTickState();
+    loadState();
     await loadAllData();
   });
 
@@ -1821,6 +2084,122 @@
         '<div class="cl-empty">Select a project above to view its task checklist.</div>';
     }
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CUSTOM TASK MODAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  (function () {
+    const modal     = document.getElementById('customTaskModal');
+    const btnAdd    = document.getElementById('btnAddTask');
+    const ctProject = document.getElementById('ctProject');
+    const ctStage   = document.getElementById('ctStage');
+    const ctLabel   = document.getElementById('ctLabel');
+    const ctDueDate = document.getElementById('ctDueDate');
+    const ctRole    = document.getElementById('ctRole');
+    const ctCancel  = document.getElementById('ctCancel');
+    const ctSave    = document.getElementById('ctSave');
+
+    function openModal() {
+      // Populate project dropdown with current projects
+      ctProject.innerHTML = '';
+      for (const p of getSortedProjects()) {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        ctProject.appendChild(opt);
+      }
+      // Pre-select the currently active project in the checklist
+      const selected = document.getElementById('projectSelect').value;
+      if (selected) ctProject.value = selected;
+
+      // Default due date to today
+      ctDueDate.value = new Date().toISOString().split('T')[0];
+      ctLabel.value   = '';
+      modal.style.display = 'flex';
+      ctLabel.focus();
+    }
+
+    function closeModal() {
+      modal.style.display = 'none';
+    }
+
+    btnAdd.addEventListener('click', openModal);
+    ctCancel.addEventListener('click', closeModal);
+    // Close on backdrop click
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    // Keyboard close
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
+    });
+
+    ctSave.addEventListener('click', () => {
+      const projectName = ctProject.value;
+      const stage       = ctStage.value;
+      const label       = ctLabel.value.trim();
+      const dueDateStr  = ctDueDate.value;
+      const role        = ctRole.value;
+
+      if (!projectName) { alert('Please select a project.'); return; }
+      if (!label)        { alert('Please enter a task name.'); return; }
+      if (!dueDateStr)   { alert('Please select a due date.'); return; }
+
+      const dueDate = new Date(dueDateStr + 'T00:00:00');
+      if (isNaN(dueDate.getTime())) { alert('Invalid due date.'); return; }
+
+      // Create and persist custom task
+      const id = `custom_${Date.now()}`;
+      const ct = { id, projectName, stage, label, role, dueDate: dueDateStr };
+      appState.customTasks.push(ct);
+
+      // Add directly to allTasks (no full reload needed)
+      const project = appState.projects.find(p => p.name === projectName);
+      if (project) {
+        appState.allTasks.push({
+          projectName,
+          projectRole:     project.role,
+          stage,
+          taskDef:         { id, label, role, stage, days_before: 0 },
+          dueDate,
+          actualStageDate: null,
+          tickKey:         tickKey(projectName, stage, id),
+          isCustom:        true,
+        });
+      }
+
+      saveState();
+      renderOpenTasks();
+      renderTimeline();
+      const sel = document.getElementById('projectSelect').value;
+      if (sel === projectName) renderChecklistTasks(projectName);
+
+      closeModal();
+    });
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLEAR SAVED DATA MODAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  (function () {
+    const modal   = document.getElementById('clearDataModal');
+    const btnOpen = document.getElementById('btnClearData');
+    const btnCancel  = document.getElementById('clearDataCancel');
+    const btnConfirm = document.getElementById('clearDataConfirm');
+
+    btnOpen.addEventListener('click', () => {
+      modal.style.display = 'flex';
+    });
+    btnCancel.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+    btnConfirm.addEventListener('click', () => {
+      localStorage.removeItem(LS_KEY);
+      location.reload();
+    });
+  })();
 
   // Render initial idle state
   clearDebug();
