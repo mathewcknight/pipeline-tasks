@@ -62,8 +62,17 @@
       min-height: 100vh;
       min-width: 1100px;
     }
+    /* Page header — title on left, summary cards on right */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .page-header-left { flex: 1; }
     h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #e6edf3; }
-    .subtitle { font-size: 0.82rem; color: #8b949e; margin-bottom: 20px; }
+    .subtitle { font-size: 0.82rem; color: #8b949e; }
 
     /* ── Controls ── */
     .controls {
@@ -106,9 +115,9 @@
     /* ══ Summary cards ═════════════════════════════════════════════════════════ */
     #summaryCards {
       display: flex;
-      justify-content: flex-end;
       gap: 10px;
-      margin-bottom: 20px;
+      flex-shrink: 0;
+      align-self: flex-start;
     }
     .stat-card {
       background: #161b22;
@@ -699,8 +708,28 @@
 </head>
 <body>
 
-  <h1>Grant Pipeline Dashboard</h1>
-  <p class="subtitle">Mathew Knight — Grant Pipeline Manager <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
+  <!-- Page header: title left, summary cards right -->
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Grant Pipeline Dashboard</h1>
+      <p class="subtitle">Mathew Knight — Grant Pipeline Manager <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
+    </div>
+    <!-- Summary cards (hidden until data loads) -->
+    <div id="summaryCards" style="display:none">
+      <div class="stat-card stat-overdue" id="cardOverdue">
+        <div class="stat-card-number" id="statOverdue">0</div>
+        <div class="stat-card-label">Overdue</div>
+      </div>
+      <div class="stat-card stat-today" id="cardToday">
+        <div class="stat-card-number" id="statToday">0</div>
+        <div class="stat-card-label">Due Today</div>
+      </div>
+      <div class="stat-card stat-week" id="cardWeek">
+        <div class="stat-card-number" id="statWeek">0</div>
+        <div class="stat-card-label">Due in 7 Days</div>
+      </div>
+    </div>
+  </div>
 
   <div id="firefoxWarning" class="alert alert-warn" style="display:none">
     ⚠️ Firefox does not fully support <code>showDirectoryPicker()</code>. Please use Chrome or Edge for full functionality.
@@ -711,22 +740,6 @@
     <button id="btnReload" class="btn btn-secondary">Reload Data</button>
     <button id="btnClearData" class="btn btn-secondary" style="display:none">Clear Saved Data</button>
     <span id="status">No folder selected.</span>
-  </div>
-
-  <!-- Summary cards (hidden until data loads) -->
-  <div id="summaryCards" style="display:none">
-    <div class="stat-card stat-overdue" id="cardOverdue">
-      <div class="stat-card-number" id="statOverdue">0</div>
-      <div class="stat-card-label">Overdue</div>
-    </div>
-    <div class="stat-card stat-today" id="cardToday">
-      <div class="stat-card-number" id="statToday">0</div>
-      <div class="stat-card-label">Due Today</div>
-    </div>
-    <div class="stat-card stat-week" id="cardWeek">
-      <div class="stat-card-number" id="statWeek">0</div>
-      <div class="stat-card-label">Due in 7 Days</div>
-    </div>
   </div>
 
   <!-- Timeline (hidden until data loads) -->
@@ -825,8 +838,8 @@
     </div>
   </div>
 
-  <!-- SheetJS -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- SheetJS — place xlsx.full.min.js in the same folder as dashboard.html -->
+  <script src="xlsx.full.min.js"></script>
 
   <script>
   // ═══════════════════════════════════════════════════════════════════════════
@@ -877,10 +890,16 @@
   // generated for a new project (i.e. they are already complete).
   // Exception: if ANY tick-state key already exists for a project+stage combination
   // (meaning tasks were generated in a previous session), those tasks are preserved.
+  // Maps pipeline Stage value → assessment stages whose tasks should NOT be generated
+  // (already completed). Tasks for all other stages are generated if dates are present.
+  // Exception: if localStorage already contains tick-state keys for a skipped stage,
+  // those tasks are preserved (prior-session data takes precedence).
   const PIPELINE_STAGE_SKIP = {
     'Concept':                [],
     'Expression of Interest': ['EOI Panel'],
-    'Full Application':       ['EOI Panel', 'Prescreen'],
+    // Full Application: EOI Panel is done; the current Full App Panel assessment is not
+    // a task-generation stage — generate Prescreen, Funding Approval, Approval to Execute.
+    'Full Application':       ['EOI Panel', 'Full App Panel'],
     'Contract Processing':    ['EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval'],
   };
 
