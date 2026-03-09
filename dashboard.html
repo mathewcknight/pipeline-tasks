@@ -134,6 +134,22 @@
     { col: 'Investment Manager',             role: 'Manager'           },
   ];
 
+  // Which panel_dates.xlsx event type to look up for each stage
+  const STAGE_EVENT_TYPE = {
+    'EOI Panel':           'Panel Meeting',
+    'Prescreen':           'Panel Meeting',
+    'Full App Panel':      'Panel Meeting',
+    'Funding Approval':    'Board Meeting',
+    'Approval to Execute': 'Board Meeting',
+  };
+
+  // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
+  const MONTH_TO_NUM = {
+    january: '01', february: '02', march:    '03', april:    '04',
+    may:     '05', june:     '06', july:     '07', august:   '08',
+    september: '09', october: '10', november: '11', december: '12',
+  };
+
   // Default task definitions — used if task_definitions.json is absent.
   // 3 tasks per stage × 5 stages = 15 tasks, covering all 3 role display labels.
   // The `role` field is a display badge only — every task appears for every project.
@@ -408,29 +424,66 @@
     return JSON.parse(text);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PANEL DATE LOOKUP
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  function buildPanelLookup(panelRows) {
-    // Key: "Stage Name||YYYY-MM"  →  actual Date
-    const lookup = {};
-    for (const row of panelRows) {
-      const stage  = (row['Stage'] || '').trim();
-      const month  = coerceDate(row['Month']);
-      const actual = coerceDate(row['Actual Date']);
-      if (!stage || !month || !actual) continue;
-      const key = `${stage}||${toMonthKey(month)}`;
-      lookup[key] = actual;
+  // Parse a sheet as array-of-arrays (used for panel_dates wide format)
+  async function parseXLSXRaw(file, sheetName) {
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) {
+      throw new Error(`Sheet "${sheetName}" not found in "${file.name}". Available: ${wb.SheetNames.join(', ')}`);
     }
-    return lookup;
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
   }
 
-  function resolveActualDate(stage, forecastDate, panelLookup) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PANEL DATE LOOKUP  (wide/pivot format)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Parses the wide-format Sheet1 from panel_dates.xlsx.
+  // Returns:
+  //   lookup    — { 'Panel Meeting': { 'YYYY-MM': Date }, 'Board Meeting': { 'YYYY-MM': Date } }
+  //   months    — [{ name, key }] ordered list of parsed month columns
+  //   eventTypes — ['Panel Meeting', 'Board Meeting']
+  function parsePanelDatesWide(rawRows) {
+    // rawRows[0] = ['', 'February', 'March', ...]
+    // rawRows[1] = ['Panel Meeting', <date|''>, ...]
+    // rawRows[2] = ['Board Meeting', <date|''>, ...]
+    if (!rawRows || rawRows.length < 2) return { lookup: {}, months: [], eventTypes: [] };
+
+    const headerRow = rawRows[0];
+    const months = [];
+    for (let i = 1; i < headerRow.length; i++) {
+      const name = String(headerRow[i] || '').trim();
+      const num  = MONTH_TO_NUM[name.toLowerCase()];
+      if (num) months.push({ idx: i, name, key: `2026-${num}` });
+    }
+
+    const lookup = {};
+    for (let r = 1; r < rawRows.length; r++) {
+      const row       = rawRows[r];
+      const eventType = String(row[0] || '').trim();
+      if (!eventType) continue;
+      lookup[eventType] = {};
+      for (const { idx, key } of months) {
+        const date = coerceDate(row[idx]);
+        if (date) lookup[eventType][key] = date;
+      }
+    }
+
+    return { lookup, months, eventTypes: Object.keys(lookup) };
+  }
+
+  // Resolve the actual event date for a project stage.
+  // Uses STAGE_EVENT_TYPE to pick the right row (Panel vs Board), then matches by month.
+  function resolveActualDate(stage, forecastDate, panelData) {
     if (!forecastDate) return null;
-    const key = `${stage}||${toMonthKey(forecastDate)}`;
-    if (panelLookup[key]) return { date: panelLookup[key], source: 'panel_lookup' };
-    return { date: forecastDate, source: 'fallback' };
+    const eventType   = STAGE_EVENT_TYPE[stage];
+    const monthKey    = toMonthKey(forecastDate);
+    const eventLookup = panelData.lookup[eventType] || {};
+    if (eventLookup[monthKey]) {
+      return { date: eventLookup[monthKey], source: 'panel_lookup', eventType };
+    }
+    return { date: forecastDate, source: 'fallback', eventType };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -489,22 +542,46 @@
       return;
     }
 
+    let panelRaw;
     try {
-      panelRows = await parseXLSX(panelFile, 'Panel Dates');
-      log(`✓ panel_dates.xlsx → "Panel Dates":  ${panelRows.length} row(s)`, 'dl-ok');
+      panelRaw = await parseXLSXRaw(panelFile, 'Sheet1');
+      log(`✓ panel_dates.xlsx → "Sheet1":  ${panelRaw.length} row(s) (wide format)`, 'dl-ok');
     } catch (e) {
       log(`✗ ${e.message}`, 'dl-err');
       return;
     }
 
     // ── 3. Panel date lookup table ────────────────────────────────────────────
-    logSection('3. PANEL DATE LOOKUP TABLE');
+    logSection('3. PANEL DATE LOOKUP TABLE  (wide format)');
 
-    const panelLookup = buildPanelLookup(panelRows);
-    const lookupEntries = Object.entries(panelLookup);
-    log(`Built ${lookupEntries.length} panel date entries:`, 'dl-ok');
-    for (const [key, date] of lookupEntries) {
-      log(`   ${key}  →  ${fmtDate(date)}`, 'dl-dim');
+    const panelData = parsePanelDatesWide(panelRaw);
+    const { lookup: panelLookup, months: panelMonths, eventTypes } = panelData;
+
+    if (panelMonths.length === 0) {
+      log('⚠  No month columns recognised in panel_dates.xlsx header row.', 'dl-warn');
+      log('   Expected full month names (e.g. "February") in row 1, columns B onwards.', 'dl-dim');
+    } else {
+      log(`Parsed ${panelMonths.length} month column(s):  ${panelMonths.map(m => m.name).join(', ')}`, 'dl-ok');
+    }
+
+    // Display as a grid: event type rows × month columns
+    const colW = 14; // fixed column width for alignment
+    const pad  = (s, w) => String(s).padEnd(w);
+
+    // Header row
+    const hdr = pad('', 16) + panelMonths.map(m => pad(m.name.slice(0, colW - 1), colW)).join('');
+    log(hdr, 'dl-dim');
+
+    for (const et of eventTypes) {
+      const cells = panelMonths.map(({ key }) => {
+        const d = panelLookup[et][key];
+        return pad(d ? fmtDate(d) : '—', colW);
+      }).join('');
+      log(pad(et, 16) + cells, panelLookup[et] && Object.keys(panelLookup[et]).length ? 'dl-ok' : 'dl-dim');
+    }
+
+    if (eventTypes.length === 0) {
+      log('⚠  No event type rows found (expected "Panel Meeting" and "Board Meeting" in column A).', 'dl-warn');
     }
 
     // ── 4. Project parsing & role detection ───────────────────────────────────
@@ -533,7 +610,7 @@
         const forecastDate = coerceDate(raw);
         if (!forecastDate) { stageDates[stageName] = null; continue; }
 
-        const resolved = resolveActualDate(stageName, forecastDate, panelLookup);
+        const resolved = resolveActualDate(stageName, forecastDate, panelData);
         stageDates[stageName] = {
           forecast: forecastDate,
           actual:   resolved.date,
@@ -692,7 +769,7 @@
   log('', '');
   log('Expected files in the selected folder:', 'dl-dim');
   log('   pipeline_data.xlsx   (sheet: "MK Pipeline")', 'dl-dim');
-  log('   panel_dates.xlsx     (sheet: "Panel Dates")', 'dl-dim');
+  log('   panel_dates.xlsx     (sheet: "Sheet1", wide format — row 1: months, rows 2–3: Panel/Board Meeting dates)', 'dl-dim');
   log('   task_definitions.json  (optional — defaults used if absent)', 'dl-dim');
   </script>
 
