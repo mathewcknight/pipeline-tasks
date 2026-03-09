@@ -1650,17 +1650,19 @@
   }
 
   // Parse Sheet 1 (Project Tasks) from task_definitions.xlsx.
+  // Expected column headers (exact, case-sensitive):
+  //   id | Task name | Stage | Usual Task Owner | days_offset_due | offset_direction | duration_days
   // Returns array of normalised task def objects with derived `days_before`.
   function parseProjectTasksSheet(rows) {
     const VALID_STAGES = new Set(Object.keys(STAGE_COLUMNS));
     return rows.map(row => {
-      const id               = String(row.id               || '').trim();
-      const label            = String(row.label            || '').trim();
-      const role             = String(row.role             || 'Analyst').trim();
-      const stage            = String(row.stage            || '').trim();
-      const days_offset      = parseFloat(row.days_offset)  || 0;
-      const offset_direction = String(row.offset_direction || 'before').trim().toLowerCase();
-      const dur              = row.duration_days;
+      const id               = String(row['id']                 || '').trim();
+      const label            = String(row['Task name']          || '').trim();
+      const role             = String(row['Usual Task Owner']   || 'Analyst').trim();
+      const stage            = String(row['Stage']              || '').trim();
+      const days_offset      = parseFloat(row['days_offset_due']) || 0;
+      const offset_direction = String(row['offset_direction']   || 'before').trim().toLowerCase();
+      const dur              = row['duration_days'];
       const duration_days    = (dur !== '' && dur != null && !isNaN(parseFloat(dur)))
         ? parseFloat(dur) : null;
       // days_before: positive = before stage date, negative = after
@@ -1850,6 +1852,16 @@
         const sheet1Name = wb.SheetNames.find(n => n.trim() === 'Project Tasks');
         if (sheet1Name) {
           const rows1  = XLSX.utils.sheet_to_json(wb.Sheets[sheet1Name], { defval: '' });
+
+          // ── Raw rows diagnostic ───────────────────────────────────────────
+          log(`   Sheet "Project Tasks": ${rows1.length} raw row(s) parsed. Column keys from first row:`, 'dl-dim');
+          if (rows1.length) log(`      ${Object.keys(rows1[0]).map(k => JSON.stringify(k)).join(', ')}`, 'dl-dim');
+          log('   Raw rows:', 'dl-dim');
+          for (const r of rows1) {
+            log(`      ${JSON.stringify(r)}`, 'dl-dim');
+          }
+          // ─────────────────────────────────────────────────────────────────
+
           taskDefs     = parseProjectTasksSheet(rows1);
           log(`   Sheet "Project Tasks": ${taskDefs.length} task def(s) loaded.`, 'dl-ok');
         } else {
