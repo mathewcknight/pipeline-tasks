@@ -73,8 +73,8 @@
 
     /* Header */
     .tl-th-label {
-      width: 210px;
-      padding: 10px 14px;
+      width: 250px;
+      padding: 8px 12px;
       text-align: left;
       font-size: 0.72rem;
       font-weight: 600;
@@ -89,9 +89,9 @@
       z-index: 2;
     }
     .tl-th-month {
-      padding: 10px 12px;
+      padding: 8px 5px;
       text-align: center;
-      font-size: 0.82rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: #8b949e;
       background: #161b22;
@@ -109,30 +109,30 @@
     .tl-row:hover .tl-cell.tl-cur-col { background: #102030; }
 
     .tl-label {
-      padding: 10px 12px;
+      padding: 6px 10px;
       background: #161b22;
       border-right: 1px solid #30363d;
       position: sticky;
       left: 0;
       z-index: 1;
-      vertical-align: top;
+      vertical-align: middle;
     }
-    .tl-label-inner { display: flex; flex-direction: column; gap: 5px; }
+    .tl-label-inner { display: flex; flex-direction: row; align-items: center; gap: 7px; flex-wrap: wrap; }
     .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; }
     .tl-role-badge {
       display: inline-block;
-      padding: 2px 7px;
+      padding: 1px 6px;
       border-radius: 20px;
-      font-size: 0.66rem;
+      font-size: 0.63rem;
       font-weight: 600;
       letter-spacing: 0.02em;
       border: 1px solid;
-      align-self: flex-start;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .tl-cell {
-      padding: 8px 10px;
+      padding: 6px 7px;
       background: #161b22;
       vertical-align: top;
       border-right: 1px solid #21262d;
@@ -143,15 +143,16 @@
     /* Stage assessment markers */
     .tl-stage-marker {
       display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 4px 8px;
+      align-items: baseline;
+      gap: 4px;
+      padding: 3px 7px;
       border-radius: 5px;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       border: 1px solid;
-      white-space: nowrap;
+      white-space: normal;
+      flex-wrap: wrap;
     }
     .tl-diamond { font-size: 0.6rem; flex-shrink: 0; }
     .tl-stage-date {
@@ -247,7 +248,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v2.4';
+  const VERSION = 'v2.5';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -276,6 +277,9 @@
     'Funding Approval':    'Board Meeting',
     'Approval to Execute': 'Board Meeting',
   };
+
+  // Column in pipeline_data.xlsx that holds the approval authority (e.g. "Board", "CEO", "CIO")
+  const APPROVAL_AUTHORITY_COL = 'Approval Authority';
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
   const MONTH_TO_NUM = {
@@ -627,7 +631,7 @@
       html += `
         <td class="tl-label">
           <div class="tl-label-inner">
-            <span class="tl-project-name" title="${esc(project.name)}">${esc(truncate(project.name, 30))}</span>
+            <span class="tl-project-name" title="${esc(project.name)}">${esc(truncate(project.name, 34))}</span>
             <span class="tl-role-badge"
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
               ${esc(project.role)}
@@ -646,11 +650,14 @@
 
         for (const [stage, sd] of stagesInMonth) {
           const sc = STAGE_COLORS[stage];
+          const stageLabel = (stage === 'Funding Approval' && project.approvalAuthority)
+            ? `${stage} — ${project.approvalAuthority}`
+            : stage;
           html += `
             <div class="tl-stage-marker"
               style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
               <span class="tl-diamond">◆</span>
-              <span>${esc(stage)}</span>
+              <span>${esc(stageLabel)}</span>
               <span class="tl-stage-date">${fmtDateShort(sd.actual)}</span>
             </div>`;
         }
@@ -742,11 +749,11 @@
     if (!rawRows || rawRows.length < 2) return { lookup: {}, months: [], eventTypes: [] };
 
     const headerRow = rawRows[0];
-    const months = [];
+    // Collect column indices for recognised month-name headers (display name only)
+    const colDefs = [];
     for (let i = 1; i < headerRow.length; i++) {
       const name = String(headerRow[i] || '').trim();
-      const num  = MONTH_TO_NUM[name.toLowerCase()];
-      if (num) months.push({ idx: i, name, key: `2026-${num}` });
+      if (MONTH_TO_NUM[name.toLowerCase()]) colDefs.push({ idx: i, name });
     }
 
     const lookup = {};
@@ -755,20 +762,37 @@
       const eventType = String(row[0] || '').trim();
       if (!eventType) continue;
       lookup[eventType] = {};
-      for (const { idx, key } of months) {
+      for (const { idx } of colDefs) {
         const date = coerceDate(row[idx]);
-        if (date) lookup[eventType][key] = date;
+        // Key is derived from the actual cell date so the year is always correct
+        if (date) lookup[eventType][toMonthKey(date)] = date;
       }
     }
+
+    // Build sorted months list from all keys found in the data
+    const allKeys = new Set(Object.values(lookup).flatMap(m => Object.keys(m)));
+    const months = [...allKeys].sort().map(key => {
+      const [y, mo] = key.split('-');
+      return { key, name: new Date(+y, +mo - 1, 1).toLocaleDateString('en-AU', { month: 'long' }) };
+    });
 
     return { lookup, months, eventTypes: Object.keys(lookup) };
   }
 
   // Resolve the actual event date for a project stage.
-  // Uses STAGE_EVENT_TYPE to pick the right row (Panel vs Board), then matches by month.
-  function resolveActualDate(stage, forecastDate, panelData) {
+  // - EOI Panel / Full App Panel: always look up Panel Meeting date for that month.
+  // - Prescreen: Board-authority projects use Board Meeting date; others use Panel Meeting.
+  // - Funding Approval: Board-authority projects use Board Meeting date; others use forecast date.
+  // - Approval to Execute: always use Board Meeting date.
+  function resolveActualDate(stage, forecastDate, panelData, approvalAuthority) {
     if (!forecastDate) return null;
-    const eventType   = STAGE_EVENT_TYPE[stage];
+    const isBoard = (approvalAuthority || '').trim().toLowerCase() === 'board';
+
+    let eventType = STAGE_EVENT_TYPE[stage];
+
+    if (stage === 'Prescreen' && isBoard)         eventType = 'Board Meeting';
+    if (stage === 'Funding Approval' && !isBoard) return { date: forecastDate, source: 'fallback', eventType };
+
     const monthKey    = toMonthKey(forecastDate);
     const eventLookup = panelData.lookup[eventType] || {};
     if (eventLookup[monthKey]) {
@@ -912,6 +936,7 @@
       if (!role) { skipped++; continue; }
 
       // Resolve stage dates
+      const approvalAuthority = (row[APPROVAL_AUTHORITY_COL] || '').trim();
       const stageDates = {};
       for (const [stageName, col] of Object.entries(STAGE_COLUMNS)) {
         const raw = row[col];
@@ -920,7 +945,7 @@
         const forecastDate = coerceDate(raw);
         if (!forecastDate) { stageDates[stageName] = null; continue; }
 
-        const resolved = resolveActualDate(stageName, forecastDate, panelData);
+        const resolved = resolveActualDate(stageName, forecastDate, panelData, approvalAuthority);
         stageDates[stageName] = {
           forecast: forecastDate,
           actual:   resolved.date,
@@ -931,6 +956,7 @@
       projects.push({
         name,
         role,
+        approvalAuthority,
         impactTeam:    row['Impact Team']    || '',
         grantAmount:   row['Grant Amount']   || '',
         fundingRound:  row['Funding Round']  || '',
