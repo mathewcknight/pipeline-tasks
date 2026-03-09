@@ -218,7 +218,7 @@
 <body>
 
   <h1>Grant Pipeline Dashboard</h1>
-  <p class="subtitle">Mathew Knight — Grant Pipeline Manager</p>
+  <p class="subtitle">Mathew Knight — Grant Pipeline Manager <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
 
   <div id="firefoxWarning" class="alert alert-warn" style="display:none">
     ⚠️ Firefox does not fully support <code>showDirectoryPicker()</code>. Please use Chrome or Edge for full functionality.
@@ -246,6 +246,8 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  const VERSION = 'v2.4';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1107,6 +1109,9 @@
   // INIT
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // Show version
+  document.getElementById('appVersion').textContent = VERSION;
+
   // Firefox / unsupported browser detection
   if (typeof window.showDirectoryPicker !== 'function') {
     document.getElementById('firefoxWarning').style.display = 'block';
@@ -1114,7 +1119,7 @@
 
   // Render initial idle state
   clearDebug();
-  log('Stage 1 ready. Click "Select Dashboard Folder" to begin.', 'dl-dim');
+  log(`${VERSION} ready. Click "Select Dashboard Folder" to begin.`, 'dl-dim');
   log('', '');
   log('Expected files in the selected folder:', 'dl-dim');
   log('   pipeline_data.xlsx   (sheet: "MK Pipeline")', 'dl-dim');
