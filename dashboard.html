@@ -685,7 +685,7 @@
     if (!sheet) {
       throw new Error(`Sheet "${sheetName}" not found in "${file.name}". Available: ${wb.SheetNames.join(', ')}`);
     }
-    return XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
   }
 
   async function parseJSONFile(file) {
@@ -701,7 +701,7 @@
     if (!sheet) {
       throw new Error(`Sheet "${sheetName}" not found in "${file.name}". Available: ${wb.SheetNames.join(', ')}`);
     }
-    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
