@@ -1,3 +1,51 @@
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  GRANT PIPELINE DASHBOARD — README                                          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  FOLDER SETUP                                                                ║
+║  Open dashboard.html directly in Chrome or Edge. When prompted, select      ║
+║  the folder that contains all three data files:                              ║
+║                                                                              ║
+║    pipeline_data.xlsx       — all projects, dates & role assignments        ║
+║    panel_dates.xlsx         — panel/board meeting calendar                  ║
+║    task_definitions.json    — (optional) custom task checklist definitions  ║
+║                                                                              ║
+║  FILE NAMING CONVENTIONS                                                     ║
+║  Filenames are case-sensitive and must match exactly as shown above.         ║
+║    pipeline_data.xlsx    Required sheet name: "MK Pipeline"                 ║
+║    panel_dates.xlsx      Required sheet name: "Sheet1"                      ║
+║                            Row 1: month names (e.g. February, March …)     ║
+║                            Row 2: Panel Meeting dates                       ║
+║                            Row 3: Board Meeting dates                       ║
+║                                                                              ║
+║  TASK_DEFINITIONS.JSON SCHEMA                                                ║
+║  Must be a JSON array. Each task object:                                     ║
+║    {                                                                         ║
+║      "id":          "unique_snake_case_id",   // used as localStorage key   ║
+║      "label":       "Human-readable name",                                  ║
+║      "stage":       "EOI Panel",              // see valid values below     ║
+║      "role":        "Analyst",                // display badge only         ║
+║      "days_before": 14                        // days before stage date     ║
+║    }                                                                         ║
+║  Valid stage values:                                                         ║
+║    EOI Panel · Prescreen · Full App Panel · Funding Approval                ║
+║    · Approval to Execute                                                     ║
+║  Valid role values: Analyst · Analyst Assisting · Manager                   ║
+║  If the file is absent, built-in placeholder tasks are used.                ║
+║                                                                              ║
+║  HOW TO RESET TICK STATE                                                     ║
+║  Tick state persists in localStorage under the key:                          ║
+║    pipeline_dashboard_state                                                  ║
+║  To clear all ticks, run in the browser console:                             ║
+║    localStorage.removeItem('pipeline_dashboard_state')                       ║
+║  Or: DevTools → Application → Local Storage → delete the key, then reload.  ║
+║                                                                              ║
+║  BROWSER SUPPORT                                                             ║
+║  Requires Chrome or Edge (File System Access API). Firefox not supported.   ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,6 +60,7 @@
       color: #e6edf3;
       padding: 24px;
       min-height: 100vh;
+      min-width: 1100px;
     }
     h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #e6edf3; }
     .subtitle { font-size: 0.82rem; color: #8b949e; margin-bottom: 20px; }
@@ -371,18 +420,80 @@
     #checklist {
       flex: 0 0 42%;
       min-width: 0;
-      margin-bottom: 0;  /* override the standalone margin */
+      margin-bottom: 0;
     }
     #openTasks {
       flex: 1 1 0;
       min-width: 0;
     }
 
+    /* Scrollable content areas */
+    #checklistTasks {
+      max-height: 62vh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #30363d #161b22;
+    }
+    #checklistTasks::-webkit-scrollbar { width: 6px; }
+    #checklistTasks::-webkit-scrollbar-track { background: #161b22; }
+    #checklistTasks::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .ot-scroll {
+      max-height: 62vh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #30363d #161b22;
+    }
+    .ot-scroll::-webkit-scrollbar { width: 6px; }
+    .ot-scroll::-webkit-scrollbar-track { background: #161b22; }
+    .ot-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+    /* Panel section headers with optional count badge */
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .panel-header .section-label { margin-bottom: 0; }
+    .count-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.70rem;
+      font-weight: 600;
+      background: #21262d;
+      color: #8b949e;
+      border: 1px solid #30363d;
+    }
+    .count-badge.has-items { background: #0c2d6b; color: #79c0ff; border-color: #388bfd; }
+
+    /* ══ Debug panel toggle ══════════════════════════════════════════════════════ */
+    .debug-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      margin-top: 8px;
+      margin-bottom: 0;
+    }
+    .debug-toggle:hover .section-label { color: #c9d1d9; }
+    .debug-chevron {
+      font-size: 0.65rem;
+      color: #8b949e;
+      transition: transform .2s;
+      display: inline-block;
+    }
+    .debug-chevron.open { transform: rotate(90deg); }
+    #debugPanel {
+      margin-top: 8px;
+      transition: none;
+    }
+
     /* ══ Open Tasks Panel ═══════════════════════════════════════════════════════ */
     .ot-scroll {
       border: 1px solid #30363d;
       border-radius: 8px;
-      overflow: hidden;
       background: #161b22;
     }
     .ot-table {
@@ -477,7 +588,9 @@
 
     <!-- Left: Project Checklist (hidden until data loads) -->
     <div id="checklist" style="display:none">
-      <p class="section-label">Project Checklist</p>
+      <div class="panel-header">
+        <p class="section-label">Project Checklist</p>
+      </div>
       <div class="cl-controls">
         <select id="projectSelect" class="cl-project-select">
           <option value="">— Select a project —</option>
@@ -488,7 +601,10 @@
 
     <!-- Right: Global Open Tasks (hidden until data loads) -->
     <div id="openTasks" style="display:none">
-      <p class="section-label">All Open Tasks</p>
+      <div class="panel-header">
+        <p class="section-label">All Open Tasks</p>
+        <span id="openTaskCount" class="count-badge"></span>
+      </div>
       <div class="ot-scroll">
         <div id="openTasksList"></div>
       </div>
@@ -496,9 +612,12 @@
 
   </div>
 
-  <!-- Debug panel -->
-  <p class="section-label" style="margin-top:8px">Debug &amp; Data Log</p>
-  <div id="debugPanel">
+  <!-- Debug panel (collapsed by default) -->
+  <div id="debugToggle" class="debug-toggle" role="button" aria-expanded="false" tabindex="0">
+    <span class="debug-chevron" id="debugChevron">&#9658;</span>
+    <p class="section-label">Debug &amp; Data Log</p>
+  </div>
+  <div id="debugPanel" style="display:none">
     <div class="dl-dim">Waiting for folder selection…</div>
   </div>
 
@@ -510,7 +629,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v4.0';
+  const VERSION = 'v5.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1495,12 +1614,19 @@
     if (!appState.projects.length) { container.style.display = 'none'; return; }
     container.style.display = 'block';
 
-    const listEl = document.getElementById('openTasksList');
+    const listEl    = document.getElementById('openTasksList');
+    const countEl   = document.getElementById('openTaskCount');
 
     // All unticked tasks, sorted by due date ascending
     const tasks = appState.allTasks
       .filter(t => !appState.tickState[t.tickKey])
       .sort((a, b) => a.dueDate - b.dueDate);
+
+    // Update count badge
+    if (countEl) {
+      countEl.textContent = tasks.length ? `${tasks.length} open` : 'all done';
+      countEl.className   = tasks.length ? 'count-badge has-items' : 'count-badge';
+    }
 
     if (!tasks.length) {
       listEl.innerHTML = '<div class="ot-all-done">✓ All tasks complete</div>';
@@ -1611,6 +1737,21 @@
   if (typeof window.showDirectoryPicker !== 'function') {
     document.getElementById('firefoxWarning').style.display = 'block';
   }
+
+  // Debug panel toggle
+  (function () {
+    const toggle  = document.getElementById('debugToggle');
+    const panel   = document.getElementById('debugPanel');
+    const chevron = document.getElementById('debugChevron');
+    function toggleDebug() {
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display  = isOpen ? 'none' : 'block';
+      chevron.classList.toggle('open', !isOpen);
+      toggle.setAttribute('aria-expanded', String(!isOpen));
+    }
+    toggle.addEventListener('click', toggleDebug);
+    toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDebug(); } });
+  })();
 
   // Project dropdown
   document.getElementById('projectSelect').addEventListener('change', e => {
