@@ -360,6 +360,98 @@
       color: #8b949e;
       font-size: 0.84rem;
     }
+
+    /* ══ Two-panel row ══════════════════════════════════════════════════════════ */
+    #panels {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    #checklist {
+      flex: 0 0 42%;
+      min-width: 0;
+      margin-bottom: 0;  /* override the standalone margin */
+    }
+    #openTasks {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    /* ══ Open Tasks Panel ═══════════════════════════════════════════════════════ */
+    .ot-scroll {
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #161b22;
+    }
+    .ot-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .ot-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .ot-th {
+      padding: 8px 10px;
+      background: #0d1117;
+      font-size: 0.70rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      border-bottom: 1px solid #30363d;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .ot-th:last-child { width: 36px; text-align: center; }
+
+    .ot-row {
+      border-bottom: 1px solid #21262d;
+      transition: background .1s;
+    }
+    .ot-row:last-child { border-bottom: none; }
+    .ot-row:hover { background: #1c2128; }
+    .ot-row.cl-overdue  { background: rgba(248, 81, 73, 0.08); }
+    .ot-row.cl-due-soon { background: rgba(210, 153, 34, 0.08); }
+    .ot-row.cl-overdue:hover  { background: rgba(248, 81, 73, 0.14); }
+    .ot-row.cl-due-soon:hover { background: rgba(210, 153, 34, 0.14); }
+
+    .ot-td {
+      padding: 8px 10px;
+      font-size: 0.81rem;
+      color: #c9d1d9;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ot-td-project { font-size: 0.78rem; color: #8b949e; }
+    .ot-td-due {
+      font-size: 0.78rem;
+      color: #8b949e;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .ot-row.cl-overdue  .ot-td-due { color: #f85149; font-weight: 600; }
+    .ot-row.cl-due-soon .ot-td-due { color: #d29922; font-weight: 600; }
+    .ot-td-tick { text-align: center; }
+    .ot-td-tick input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #3fb950;
+      cursor: pointer;
+    }
+    .ot-all-done {
+      padding: 28px;
+      text-align: center;
+      color: #3fb950;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -380,15 +472,28 @@
   <!-- Timeline (hidden until data loads) -->
   <div id="timeline" style="display:none"></div>
 
-  <!-- Checklist panel (hidden until data loads) -->
-  <div id="checklist" style="display:none">
-    <p class="section-label">Project Checklist</p>
-    <div class="cl-controls">
-      <select id="projectSelect" class="cl-project-select">
-        <option value="">— Select a project —</option>
-      </select>
+  <!-- Panels row: left checklist + right open tasks -->
+  <div id="panels">
+
+    <!-- Left: Project Checklist (hidden until data loads) -->
+    <div id="checklist" style="display:none">
+      <p class="section-label">Project Checklist</p>
+      <div class="cl-controls">
+        <select id="projectSelect" class="cl-project-select">
+          <option value="">— Select a project —</option>
+        </select>
+      </div>
+      <div id="checklistTasks"></div>
     </div>
-    <div id="checklistTasks"></div>
+
+    <!-- Right: Global Open Tasks (hidden until data loads) -->
+    <div id="openTasks" style="display:none">
+      <p class="section-label">All Open Tasks</p>
+      <div class="ot-scroll">
+        <div id="openTasksList"></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Debug panel -->
@@ -405,7 +510,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v3.0';
+  const VERSION = 'v4.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1204,9 +1309,10 @@
     appState.taskDefs  = taskDefs;
     appState.allTasks  = allTasks;
 
-    // ── Render timeline & checklist ───────────────────────────────────────────
+    // ── Render timeline, checklist & open tasks ───────────────────────────────
     renderTimeline();
     renderChecklist();
+    renderOpenTasks();
 
     // ── 8. Timeline match diagnostic ──────────────────────────────────────────
     logSection('8. TIMELINE MATCH DIAGNOSTIC');
@@ -1367,14 +1473,100 @@
     html += '</div>'; // cl-tasks-wrap
     container.innerHTML = html;
 
-    // Attach checkbox change listeners
+    // Attach checkbox change listeners — sync right panel and timeline on every tick
     container.querySelectorAll('.cl-checkbox').forEach(cb => {
       cb.addEventListener('change', e => {
         const key     = e.target.dataset.tickKey;
         const project = e.target.dataset.project;
         setTick(key, e.target.checked);
         renderChecklistTasks(project);
+        renderOpenTasks();
         renderTimeline();
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OPEN TASKS PANEL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderOpenTasks() {
+    const container = document.getElementById('openTasks');
+    if (!appState.projects.length) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+
+    const listEl = document.getElementById('openTasksList');
+
+    // All unticked tasks, sorted by due date ascending
+    const tasks = appState.allTasks
+      .filter(t => !appState.tickState[t.tickKey])
+      .sort((a, b) => a.dueDate - b.dueDate);
+
+    if (!tasks.length) {
+      listEl.innerHTML = '<div class="ot-all-done">✓ All tasks complete</div>';
+      return;
+    }
+
+    // Col widths: project | stage | label | role | due | tick
+    let html = `
+      <table class="ot-table">
+        <thead><tr>
+          <th class="ot-th" style="width:18%">Project</th>
+          <th class="ot-th" style="width:15%">Stage</th>
+          <th class="ot-th">Task</th>
+          <th class="ot-th" style="width:13%">Role</th>
+          <th class="ot-th" style="width:90px;text-align:right">Due</th>
+          <th class="ot-th" style="width:36px;text-align:center">✓</th>
+        </tr></thead>
+        <tbody>`;
+
+    for (const t of tasks) {
+      const sc      = STAGE_COLORS[t.stage];
+      const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
+      const urgency = dateUrgency(t.dueDate);
+      const rowCls  = urgency ? ` cl-${urgency}` : '';
+
+      html += `
+        <tr class="ot-row${rowCls}">
+          <td class="ot-td ot-td-project" title="${esc(t.projectName)}">${esc(truncate(t.projectName, 22))}</td>
+          <td class="ot-td">
+            <span class="cl-stage-chip-sm"
+              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+              ${esc(t.stage)}
+            </span>
+          </td>
+          <td class="ot-td" title="${esc(t.taskDef.label)}">${esc(t.taskDef.label)}</td>
+          <td class="ot-td">
+            <span class="cl-role-badge"
+              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(t.taskDef.role)}
+            </span>
+          </td>
+          <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
+          <td class="ot-td ot-td-tick">
+            <input type="checkbox" class="ot-checkbox"
+              data-tick-key="${esc(t.tickKey)}"
+              data-project="${esc(t.projectName)}">
+          </td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    listEl.innerHTML = html;
+
+    // Attach tick listeners — ticking removes from this list and syncs checklist
+    listEl.querySelectorAll('.ot-checkbox').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const key     = e.target.dataset.tickKey;
+        const project = e.target.dataset.project;
+        setTick(key, true); // can only tick (not untick) from this panel
+        renderOpenTasks();
+        renderTimeline();
+        // Sync left checklist if the affected project is currently selected
+        const selectedProject = document.getElementById('projectSelect').value;
+        if (selectedProject === project) {
+          renderChecklistTasks(project);
+        }
       });
     });
   }
