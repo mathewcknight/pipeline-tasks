@@ -629,7 +629,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v5.0';
+  const VERSION = 'v5.1';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -661,6 +661,20 @@
 
   // Column in pipeline_data.xlsx that holds the approval authority (e.g. "Board", "CEO", "CIO")
   const APPROVAL_AUTHORITY_COL = 'Approval Authority';
+
+  // Column in pipeline_data.xlsx that holds the project's current pipeline stage.
+  const PIPELINE_STAGE_COL = 'Stage';
+
+  // Maps each pipeline Stage value → assessment stages whose tasks should NOT be
+  // generated for a new project (i.e. they are already complete).
+  // Exception: if ANY tick-state key already exists for a project+stage combination
+  // (meaning tasks were generated in a previous session), those tasks are preserved.
+  const PIPELINE_STAGE_SKIP = {
+    'Concept':                [],
+    'Expression of Interest': ['EOI Panel'],
+    'Full Application':       ['EOI Panel', 'Prescreen'],
+    'Contract Processing':    ['EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval'],
+  };
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
   const MONTH_TO_NUM = {
@@ -1334,10 +1348,13 @@
         };
       }
 
+      const pipelineStage = (row[PIPELINE_STAGE_COL] || '').trim();
+
       projects.push({
         name,
         role,
         approvalAuthority,
+        pipelineStage,
         impactTeam:    row['Impact Team']    || '',
         grantAmount:   row['Grant Amount']   || '',
         fundingRound:  row['Funding Round']  || '',
@@ -1352,7 +1369,8 @@
     );
 
     for (const p of projects) {
-      log(`   [${p.role}]  ${p.name}`, 'dl-ok');
+      const stageLabel = p.pipelineStage ? `  stage="${p.pipelineStage}"` : '  stage=(none)';
+      log(`   [${p.role}]  ${p.name}${stageLabel}`, 'dl-ok');
       for (const [stage, sd] of Object.entries(p.stageDates)) {
         if (!sd) { log(`      ${stage}:  — (no date)`, 'dl-dim'); continue; }
         log(
@@ -1369,8 +1387,30 @@
     const allTasks = [];
 
     for (const project of projects) {
+      // Determine which stages are already complete based on the pipeline Stage column.
+      const skipStages = PIPELINE_STAGE_SKIP[project.pipelineStage] || [];
+      if (skipStages.length) {
+        log(
+          `   [${project.name}]  pipeline stage "${project.pipelineStage}"` +
+          `  →  skipping: ${skipStages.join(', ')}  (unless prior localStorage data found)`,
+          'dl-warn',
+        );
+      }
+
       for (const [stage, sd] of Object.entries(project.stageDates)) {
         if (!sd || !sd.actual) continue;
+
+        // Skip this stage if it's in the completed set — UNLESS localStorage already
+        // contains at least one key for this project+stage (tasks from a prior session).
+        if (skipStages.includes(stage)) {
+          const lsPrefix  = `${project.name}__${stage}__`;
+          const hasLegacy = Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix));
+          if (!hasLegacy) {
+            log(`      ↳ skipped stage "${stage}" (no prior tasks found in localStorage)`, 'dl-dim');
+            continue;
+          }
+          log(`      ↳ preserved stage "${stage}" — existing localStorage data detected`, 'dl-ok');
+        }
 
         const stageTasks = taskDefs.filter(t => t.stage === stage);
         for (const td of stageTasks) {
