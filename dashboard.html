@@ -907,8 +907,9 @@
     <!-- Right: Global Open Tasks (hidden until data loads) -->
     <div id="openTasks" style="display:none">
       <div class="panel-header">
-        <p class="section-label">All Open Tasks</p>
+        <p class="section-label">All Tasks</p>
         <span id="openTaskCount" class="count-badge"></span>
+        <button id="btn3WeekFilter" class="btn-filter filter-active" title="Toggle 3-week window filter">Showing: Next 3 weeks</button>
         <button id="btnStartFilter" class="btn-filter filter-active" title="Toggle start-date filter">Showing: Active tasks only</button>
         <button id="btnAddTask" class="btn-icon" title="Add a custom task">+</button>
       </div>
@@ -1136,7 +1137,8 @@
     editingTickKey:   null,  // tickKey of the task whose inline edit row is open
     editingPanel:     null,  // 'checklist' | 'opentasks'
     editingStageKey:  null,  // "ProjectName__Stage" for timeline diamond being edited
-    showActiveOnly:   true,  // start-date filter: true = hide tasks not yet started
+    showActiveOnly:    true,  // start-date filter: true = hide tasks not yet started
+    showNext3Weeks:    true,  // date-window filter: true = only show tasks due within 3 weeks
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2737,8 +2739,14 @@
       filterBtn.textContent = appState.showActiveOnly ? 'Showing: Active tasks only' : 'Showing: All tasks';
       filterBtn.classList.toggle('filter-active', appState.showActiveOnly);
     }
+    const filter3wBtn = document.getElementById('btn3WeekFilter');
+    if (filter3wBtn) {
+      filter3wBtn.textContent = appState.showNext3Weeks ? 'Showing: Next 3 weeks' : 'Showing: All time';
+      filter3wBtn.classList.toggle('filter-active', appState.showNext3Weeks);
+    }
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
+    const in3Weeks = addDays(today, 21);
 
     // Build project task list — exclude Concept (no due date) and ticked
     let projTasks = appState.allTasks
@@ -2748,6 +2756,13 @@
       projTasks = projTasks.filter(t => {
         const sd = getEffectiveStartDate(t);
         return !sd || sd <= today;
+      });
+    }
+
+    if (appState.showNext3Weeks) {
+      projTasks = projTasks.filter(t => {
+        const due = getEffectiveDueDate(t);
+        return due && due <= in3Weeks;
       });
     }
 
@@ -2761,7 +2776,11 @@
     });
 
     // Routine task occurrences (always shown, not filtered by start date)
-    const routineOccs = buildRoutineOccurrences().filter(r => !appState.tickState[r.tickKey]);
+    let routineOccs = buildRoutineOccurrences().filter(r => !appState.tickState[r.tickKey]);
+
+    if (appState.showNext3Weeks) {
+      routineOccs = routineOccs.filter(r => r.dueDate <= in3Weeks);
+    }
 
     // Combine: project tasks + routine tasks sorted together by due date
     const allRows = [...projTasks, ...routineOccs].sort((a, b) => {
@@ -2773,13 +2792,13 @@
       return da - db;
     });
 
-    const totalOpen = allRows.length;
+    const totalShown = allRows.length;
     if (countEl) {
-      countEl.textContent = totalOpen ? `${totalOpen} open` : 'all done';
-      countEl.className   = totalOpen ? 'count-badge has-items' : 'count-badge';
+      countEl.textContent = totalShown ? `${totalShown} tasks shown` : 'all done';
+      countEl.className   = totalShown ? 'count-badge has-items' : 'count-badge';
     }
 
-    if (!totalOpen) {
+    if (!totalShown) {
       listEl.innerHTML = '<div class="ot-all-done">✓ All tasks complete</div>';
       return;
     }
@@ -2974,6 +2993,11 @@
   })();
 
   // Start-date filter toggle
+  document.getElementById('btn3WeekFilter').addEventListener('click', () => {
+    appState.showNext3Weeks = !appState.showNext3Weeks;
+    renderOpenTasks();
+  });
+
   document.getElementById('btnStartFilter').addEventListener('click', () => {
     appState.showActiveOnly = !appState.showActiveOnly;
     renderOpenTasks();
