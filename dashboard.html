@@ -237,6 +237,7 @@
       border: 1px solid;
       white-space: normal;
       flex-wrap: wrap;
+      position: relative;
     }
     .tl-diamond { font-size: 0.6rem; flex-shrink: 0; }
     .tl-stage-date {
@@ -246,6 +247,30 @@
       padding-left: 6px;
       font-size: 0.67rem;
     }
+    /* Pencil edit button — hidden until marker hovered */
+    .tl-marker-pencil {
+      background: transparent; border: none; color: inherit;
+      opacity: 0; cursor: pointer; font-size: 0.75rem; padding: 0 2px;
+      transition: opacity .15s; flex-shrink: 0;
+    }
+    .tl-stage-marker:hover .tl-marker-pencil { opacity: 0.75; }
+    .tl-marker-pencil:hover { opacity: 1 !important; }
+    /* Inline date-edit row inside a marker */
+    .tl-marker-edit {
+      width: 100%; display: flex; align-items: center; gap: 4px;
+      flex-wrap: wrap; margin-top: 4px;
+    }
+    .tl-date-input {
+      background: rgba(0,0,0,0.45); color: inherit;
+      border: 1px solid currentColor; border-radius: 3px;
+      padding: 2px 4px; font-size: 0.7rem; width: 108px;
+    }
+    .tl-btn-save, .tl-btn-cancel {
+      background: transparent; border: 1px solid currentColor;
+      border-radius: 3px; color: inherit; cursor: pointer;
+      font-size: 0.68rem; padding: 1px 5px;
+    }
+    .tl-date-overridden { text-decoration: underline dotted; }
 
     /* Task chips */
     .tl-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
@@ -994,7 +1019,7 @@
   // Which panel_dates.xlsx event type to look up for each stage
   const STAGE_EVENT_TYPE = {
     'EOI Panel':           'Panel Meeting',
-    'Prescreen':           'Panel Meeting',
+    'Prescreen':           'Board Meeting',   // month from Prescreen Date, day from Board Meeting
     'Full App Panel':      'Panel Meeting',
     'Funding Approval':    'Board Meeting',
     'Approval to Execute': 'Board Meeting',
@@ -1104,10 +1129,12 @@
     tickState:      {},    // { "key": true } from localStorage
     customTasks:    [],    // user-created task records persisted to localStorage
     prevDueDates:   {},    // { tickKey: "YYYY-MM-DD" } from last save — date-shift detection
-    overrides:      {},    // { "override__key": "YYYY-MM-DD", "override_start__key": "YYYY-MM-DD" }
-    editingTickKey: null,  // tickKey of the task whose inline edit row is open
-    editingPanel:   null,  // 'checklist' | 'opentasks'
-    showActiveOnly: true,  // start-date filter: true = hide tasks not yet started
+    overrides:        {},    // { "override__key": "YYYY-MM-DD", "override_start__key": "YYYY-MM-DD",
+                            //   "stage_date__ProjectName__Stage": "YYYY-MM-DD" }
+    editingTickKey:   null,  // tickKey of the task whose inline edit row is open
+    editingPanel:     null,  // 'checklist' | 'opentasks'
+    editingStageKey:  null,  // "ProjectName__Stage" for timeline diamond being edited
+    showActiveOnly:   true,  // start-date filter: true = hide tasks not yet started
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1534,54 +1561,99 @@
   // TIMELINE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Returns the 4-month window: [prev, current, next, next+1]
-  function getTimelineMonths() {
-    const now = new Date();
+  // Return the Monday of the week containing `date`.
+  function getMondayOf(date) {
+    const d = new Date(date); d.setHours(0, 0, 0, 0);
+    const day = d.getDay(); // 0=Sun … 6=Sat
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    return d;
+  }
+
+  // Return the YYYY-MM-DD key for the Monday of the week containing `date`.
+  function toWeekKey(date) {
+    return getMondayOf(date).toISOString().split('T')[0];
+  }
+
+  // Format a Monday date as "dd-Mmm" (e.g. "03-Mar").
+  function fmtWeekLabel(monday) {
+    const d = String(monday.getDate()).padStart(2, '0');
+    const m = monday.toLocaleDateString('en-AU', { month: 'short' });
+    return `${d}-${m}`;
+  }
+
+  // Return the effective actual date for a stage, applying any stage_date override.
+  function getEffectiveStageActual(projectName, stage, actualDate) {
+    const ov = appState.overrides[`stage_date__${projectName}__${stage}`];
+    return ov ? new Date(ov + 'T00:00:00') : actualDate;
+  }
+
+  // 12-week window: starts on the Monday 2 weeks before today (rounded back),
+  // runs through 10 weeks ahead (12 total columns).
+  function getTimelineWeeks() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const startMonday = getMondayOf(addDays(today, -14));
     const result = [];
-    for (let offset = -1; offset <= 2; offset++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    for (let i = 0; i < 12; i++) {
+      const weekStart = addDays(startMonday, i * 7);
+      const weekEnd   = addDays(weekStart, 6);
       result.push({
-        key:       toMonthKey(d),
-        label:     d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
-        isCurrent: offset === 0,
+        key:           weekStart.toISOString().split('T')[0],
+        weekStart,
+        weekEnd,
+        label:         fmtWeekLabel(weekStart),
+        isCurrentWeek: today >= weekStart && today <= weekEnd,
       });
     }
     return result;
   }
 
-  // Sort projects by when they next have activity visible in the timeline window.
-  // Bucket 0 = something in the current month; 1 = next month; 2 = month after; 3 = no activity.
+  // Sort projects by when they next have visible activity in the 12-week window.
   function getProjectActivityBucket(project) {
-    const months  = getTimelineMonths(); // [prev, current, next, next+1]
-    const curKey  = months[1].key;
-    const nextKey = months[2].key;
-    const aftKey  = months[3].key;
-    const hasIn = key => Object.values(project.stageDates).some(sd => sd && toMonthKey(sd.actual) === key);
-    if (hasIn(curKey))  return 0;
-    if (hasIn(nextKey)) return 1;
-    if (hasIn(aftKey))  return 2;
-    return 3;
+    const weeks     = getTimelineWeeks();
+    const curIdx    = weeks.findIndex(w => w.isCurrentWeek);
+    let   minFuture = weeks.length; // index of earliest stage date at/after current week
+    for (const [stage, sd] of Object.entries(project.stageDates)) {
+      if (!sd || !sd.actual) continue;
+      const effDate = getEffectiveStageActual(project.name, stage, sd.actual);
+      const idx = weeks.findIndex(w => toWeekKey(effDate) === w.key);
+      if (idx >= curIdx && idx < minFuture) minFuture = idx;
+    }
+    if (minFuture === curIdx)     return 0; // this week
+    if (minFuture === curIdx + 1) return 1; // next week
+    if (minFuture <  weeks.length) return 2; // later in window
+    return 3; // nothing in window
   }
 
   function getSortedProjects() {
     return [...appState.projects].sort((a, b) => getProjectActivityBucket(a) - getProjectActivityBucket(b));
   }
 
+  // Returns true for stages where the user can override the date directly on the timeline.
+  // Funding Approval is editable only for non-Board authority (CEO / CIO / etc.).
+  function isStageEditable(stage, approvalAuthority) {
+    if (stage === 'Approval to Execute') return true;
+    if (stage === 'Funding Approval') {
+      const auth = (approvalAuthority || '').trim().toLowerCase();
+      return auth !== '' && auth !== 'board';
+    }
+    return false;
+  }
+
   function renderTimeline() {
     const container = document.getElementById('timeline');
     if (!appState.projects.length) { container.style.display = 'none'; return; }
 
-    const months = getTimelineMonths();
+    const weeks = getTimelineWeeks();
 
     // ── Table header ──────────────────────────────────────────────────────────
     let html = '<p class="section-label">Pipeline Timeline</p><div class="tl-wrap"><table class="tl-table"><thead><tr>';
     html += '<th class="tl-th-label">Project</th>';
-    for (const m of months) {
-      html += `<th class="tl-th-month${m.isCurrent ? ' tl-cur' : ''}">${esc(m.label)}</th>`;
+    for (const w of weeks) {
+      html += `<th class="tl-th-month${w.isCurrentWeek ? ' tl-cur' : ''}">${esc(w.label)}</th>`;
     }
     html += '</tr></thead><tbody>';
 
-    // ── One row per project (sorted by activity month) ───────────────────────
+    // ── One row per project (sorted by activity bucket) ───────────────────────
     for (const project of getSortedProjects()) {
       const rc = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
       html += '<tr class="tl-row">';
@@ -1599,27 +1671,58 @@
           </div>
         </td>`;
 
-      // Month cells
-      for (const m of months) {
-        html += `<td class="tl-cell${m.isCurrent ? ' tl-cur-col' : ''}">`;
+      // Week cells
+      for (const w of weeks) {
+        html += `<td class="tl-cell${w.isCurrentWeek ? ' tl-cur-col' : ''}">`;
 
-        // Stage assessment markers — sorted by actual date
-        const stagesInMonth = Object.entries(project.stageDates)
-          .filter(([, sd]) => sd && toMonthKey(sd.actual) === m.key)
-          .sort(([, a], [, b]) => a.actual - b.actual);
+        // Stage assessment markers — sorted by effective date
+        const stagesInWeek = Object.entries(project.stageDates)
+          .filter(([stage, sd]) => {
+            if (!sd || !sd.actual) return false;
+            const eff = getEffectiveStageActual(project.name, stage, sd.actual);
+            return toWeekKey(eff) === w.key;
+          })
+          .sort(([stA, sdA], [stB, sdB]) => {
+            const a = getEffectiveStageActual(project.name, stA, sdA.actual);
+            const b = getEffectiveStageActual(project.name, stB, sdB.actual);
+            return a - b;
+          });
 
-        for (const [stage, sd] of stagesInMonth) {
-          const sc = STAGE_COLORS[stage];
+        for (const [stage, sd] of stagesInWeek) {
+          const sc         = STAGE_COLORS[stage] || STAGE_COLORS['EOI Panel'];
+          const effDate    = getEffectiveStageActual(project.name, stage, sd.actual);
+          const hasOv      = !!appState.overrides[`stage_date__${project.name}__${stage}`];
+          const editable   = isStageEditable(stage, project.approvalAuthority);
+          const editKey    = `${project.name}__${stage}`;
+          const isEditing  = appState.editingStageKey === editKey;
+
           const stageLabel = (stage === 'Funding Approval' && project.approvalAuthority)
             ? `${stage} — ${project.approvalAuthority}`
             : stage;
-          html += `
-            <div class="tl-stage-marker"
-              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
-              <span class="tl-diamond">◆</span>
-              <span>${esc(stageLabel)}</span>
-              <span class="tl-stage-date">${fmtDateShort(sd.actual)}</span>
+
+          html += `<div class="tl-stage-marker"
+            style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+            <span class="tl-diamond">◆</span>
+            <span>${esc(stageLabel)}</span>
+            <span class="tl-stage-date${hasOv ? ' tl-date-overridden' : ''}">${fmtDateShort(effDate)}</span>`;
+
+          if (editable && !isEditing) {
+            html += `<button class="tl-marker-pencil"
+              data-edit-key="${esc(editKey)}" title="Override date for this project">✎</button>`;
+          }
+
+          if (isEditing) {
+            const dateVal = effDate.toISOString().split('T')[0];
+            html += `<div class="tl-marker-edit">
+              <input type="date" class="tl-date-input" value="${esc(dateVal)}"
+                data-edit-key="${esc(editKey)}" data-proj="${esc(project.name)}" data-stage="${esc(stage)}">
+              <button class="tl-btn-save" data-edit-key="${esc(editKey)}"
+                data-proj="${esc(project.name)}" data-stage="${esc(stage)}">✓</button>
+              <button class="tl-btn-cancel" data-edit-key="${esc(editKey)}">✕</button>
             </div>`;
+          }
+
+          html += `</div>`;
         }
 
         html += '</td>';
@@ -1631,6 +1734,33 @@
     html += '</tbody></table></div>';
     container.innerHTML = html;
     container.style.display = 'block';
+
+    // ── Wire pencil / save / cancel listeners ─────────────────────────────────
+    container.querySelectorAll('.tl-marker-pencil').forEach(btn => {
+      btn.addEventListener('click', () => {
+        appState.editingStageKey = btn.dataset.editKey;
+        renderTimeline();
+      });
+    });
+
+    container.querySelectorAll('.tl-btn-cancel').forEach(btn => {
+      btn.addEventListener('click', () => {
+        appState.editingStageKey = null;
+        renderTimeline();
+      });
+    });
+
+    container.querySelectorAll('.tl-btn-save').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = container.querySelector(
+          `.tl-date-input[data-edit-key="${CSS.escape(btn.dataset.editKey)}"]`
+        );
+        if (!input || !input.value) return;
+        saveOverride(`stage_date__${btn.dataset.proj}__${btn.dataset.stage}`, input.value);
+        appState.editingStageKey = null;
+        rebuildTasksAndRender();
+      });
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1751,17 +1881,16 @@
   }
 
   // Resolve the actual event date for a project stage.
-  // - EOI Panel / Full App Panel: always look up Panel Meeting date for that month.
-  // - Prescreen: Board-authority projects use Board Meeting date; others use Panel Meeting.
-  // - Funding Approval: Board-authority projects use Board Meeting date; others use forecast date.
-  // - Approval to Execute: always use Board Meeting date.
+  // - EOI Panel / Full App Panel: Panel Meeting date for that month.
+  // - Prescreen: Board Meeting date for the month identified by the Prescreen Date field.
+  // - Funding Approval: Board-authority → Board Meeting date; CEO/CIO → forecast date (no board meeting).
+  // - Approval to Execute: Board Meeting date.
   function resolveActualDate(stage, forecastDate, panelData, approvalAuthority) {
     if (!forecastDate) return null;
     const isBoard = (approvalAuthority || '').trim().toLowerCase() === 'board';
 
     let eventType = STAGE_EVENT_TYPE[stage];
 
-    if (stage === 'Prescreen' && isBoard)         eventType = 'Board Meeting';
     if (stage === 'Funding Approval' && !isBoard) return { date: forecastDate, source: 'fallback', eventType };
 
     const monthKey    = toMonthKey(forecastDate);
@@ -1819,6 +1948,151 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // MAIN DATA LOAD
   // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── Build all tasks from in-memory project + task definition data ────────────
+  // Called both from loadAllData (initial load) and rebuildTasksAndRender
+  // (when a stage-date override is saved, without re-reading XLSX files).
+  function buildAllTasks(projects, taskDefs, verbose = false) {
+    const threeMonthsAgo = addDays(new Date(), -90);
+    threeMonthsAgo.setHours(0, 0, 0, 0);
+
+    const allTasks = [];
+
+    for (const project of projects) {
+      const psLower    = (project.pipelineStage || '').toLowerCase();
+      const matchedKey = Object.keys(PIPELINE_STAGE_INCLUDE).find(k => k.toLowerCase() === psLower);
+      const includeBase = matchedKey
+        ? PIPELINE_STAGE_INCLUDE[matchedKey]
+        : Object.keys(STAGE_COLUMNS);
+
+      const stagesToGen = new Set(includeBase);
+
+      if (!matchedKey && project.pipelineStage && verbose) {
+        log(
+          `   ⚠  [${project.name}]  pipeline stage "${project.pipelineStage}" not in PIPELINE_STAGE_INCLUDE` +
+          ` — generating all assessment stages with dates as fallback.`,
+          'dl-warn',
+        );
+      }
+
+      // Preserve stages with existing localStorage tick data
+      for (const stage of Object.keys(STAGE_COLUMNS)) {
+        if (stagesToGen.has(stage)) continue;
+        const lsPrefix = `${project.name}__${stage}__`;
+        if (Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix))) {
+          stagesToGen.add(stage);
+          if (verbose) log(`   [${project.name}]  preserved stage "${stage}" — existing localStorage data detected`, 'dl-ok');
+        }
+      }
+
+      if (verbose) {
+        log(
+          `   [${project.name}]  pipeline stage "${project.pipelineStage || '(none)'}"` +
+          `  →  generating stages: ${[...stagesToGen].join(', ')}`,
+          'dl-dim',
+        );
+      }
+
+      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS)];
+      for (const stage of ORDERED_STAGES) {
+        if (!stagesToGen.has(stage)) continue;
+
+        const stageTasks = taskDefs.filter(t => t.stage === stage);
+        if (!stageTasks.length) {
+          if (verbose) log(`      ↳ no task defs found for stage "${stage}" — check task_definitions.xlsx`, 'dl-warn');
+          continue;
+        }
+
+        if (stage === 'Concept') {
+          for (const td of stageTasks) {
+            allTasks.push({
+              projectName:     project.name,
+              projectRole:     project.role,
+              stage,
+              taskDef:         td,
+              dueDate:         null,
+              startDate:       null,
+              actualStageDate: null,
+              tickKey:         tickKey(project.name, stage, td.id),
+              isConcept:       true,
+            });
+          }
+          if (verbose) log(`      ↳ Concept: ${stageTasks.length} dateless task(s) generated`, 'dl-dim');
+          continue;
+        }
+
+        // Apply any stage-date override when computing task due dates
+        const sd = project.stageDates[stage];
+        if (!sd || !sd.actual) {
+          if (verbose) log(`      ↳ ${stage}: no date in pipeline data — tasks skipped`, 'dl-dim');
+          continue;
+        }
+
+        const effectiveStageDate = getEffectiveStageActual(project.name, stage, sd.actual);
+
+        let generated = 0;
+        for (const td of stageTasks) {
+          const computedDueDate = addDays(effectiveStageDate, -td.days_before);
+          const startDate = td.duration_days != null
+            ? addDays(computedDueDate, -td.duration_days)
+            : null;
+
+          if (computedDueDate < threeMonthsAgo) {
+            if (verbose) log(`      ↳ stale task skipped: "${td.id}" due ${fmtDate(computedDueDate)}`, 'dl-dim');
+            continue;
+          }
+
+          allTasks.push({
+            projectName:     project.name,
+            projectRole:     project.role,
+            stage,
+            taskDef:         td,
+            dueDate:         computedDueDate,
+            startDate,
+            actualStageDate: effectiveStageDate,
+            tickKey:         tickKey(project.name, stage, td.id),
+            isConcept:       false,
+          });
+          generated++;
+        }
+        if (verbose) log(`      ↳ ${stage}: ${generated} task(s) generated (stage date ${fmtDate(effectiveStageDate)})`, 'dl-dim');
+      }
+    }
+
+    // Custom tasks
+    for (const ct of appState.customTasks) {
+      const project = projects.find(p => p.name === ct.projectName);
+      if (!project) continue;
+      const dueDate = new Date(ct.dueDate + 'T00:00:00');
+      if (isNaN(dueDate.getTime())) continue;
+      if (dueDate < threeMonthsAgo) continue;
+      allTasks.push({
+        projectName:     ct.projectName,
+        projectRole:     project.role,
+        stage:           ct.stage,
+        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
+        dueDate,
+        startDate:       null,
+        actualStageDate: null,
+        tickKey:         tickKey(ct.projectName, ct.stage, ct.id),
+        isCustom:        true,
+        isConcept:       false,
+      });
+    }
+
+    return allTasks;
+  }
+
+  // Rebuild tasks from in-memory state (after a stage-date override) and re-render.
+  // Does NOT re-read XLSX files.
+  function rebuildTasksAndRender() {
+    appState.allTasks = buildAllTasks(appState.projects, appState.taskDefs, false);
+    saveState();
+    renderTimeline();
+    renderChecklist();
+    renderOpenTasks();
+    renderSummaryCards();
+  }
 
   async function loadAllData() {
     clearDebug();
@@ -2046,134 +2320,12 @@
     // ── 5. Task generation ────────────────────────────────────────────────────
     logSection('5. TASK GENERATION');
 
-    // Tasks due more than 3 months ago are stale — skip them.
-    const threeMonthsAgo = addDays(new Date(), -90);
-    threeMonthsAgo.setHours(0, 0, 0, 0);
+    // Store projects + taskDefs to appState before calling buildAllTasks so
+    // getEffectiveStageActual (which reads appState.overrides) works correctly.
+    appState.projects = projects;
+    appState.taskDefs = taskDefs;
 
-    const allTasks = [];
-
-    for (const project of projects) {
-      // Case-insensitive lookup so minor capitalisation differences in the
-      // pipeline Stage column don't silently drop all tasks.
-      const psLower    = (project.pipelineStage || '').toLowerCase();
-      const matchedKey = Object.keys(PIPELINE_STAGE_INCLUDE).find(k => k.toLowerCase() === psLower);
-      const includeBase = matchedKey
-        ? PIPELINE_STAGE_INCLUDE[matchedKey]
-        : Object.keys(STAGE_COLUMNS); // unrecognised stage → all assessment stages
-
-      const stagesToGen = new Set(includeBase);
-
-      if (!matchedKey && project.pipelineStage) {
-        log(
-          `   ⚠  [${project.name}]  pipeline stage "${project.pipelineStage}" not in PIPELINE_STAGE_INCLUDE` +
-          ` — generating all assessment stages with dates as fallback.`,
-          'dl-warn',
-        );
-      }
-
-      // Preserve any assessment stage not in the include list that already
-      // has localStorage tick data (project advancement safety net).
-      for (const stage of Object.keys(STAGE_COLUMNS)) {
-        if (stagesToGen.has(stage)) continue;
-        const lsPrefix = `${project.name}__${stage}__`;
-        if (Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix))) {
-          stagesToGen.add(stage);
-          log(`   [${project.name}]  preserved stage "${stage}" — existing localStorage data detected`, 'dl-ok');
-        }
-      }
-
-      log(
-        `   [${project.name}]  pipeline stage "${project.pipelineStage || '(none)'}"` +
-        `  →  generating stages: ${[...stagesToGen].join(', ')}`,
-        'dl-dim',
-      );
-
-      // Canonical order: Concept first, then assessment stages.
-      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS)];
-      for (const stage of ORDERED_STAGES) {
-        if (!stagesToGen.has(stage)) continue;
-
-        const stageTasks = taskDefs.filter(t => t.stage === stage);
-        if (!stageTasks.length) {
-          log(`      ↳ no task defs found for stage "${stage}" — check task_definitions.xlsx`, 'dl-warn');
-          continue;
-        }
-
-        // 'Concept' has no assessment date — always generate as dateless checklist tasks.
-        if (stage === 'Concept') {
-          for (const td of stageTasks) {
-            allTasks.push({
-              projectName:     project.name,
-              projectRole:     project.role,
-              stage,
-              taskDef:         td,
-              dueDate:         null,
-              startDate:       null,
-              actualStageDate: null,
-              tickKey:         tickKey(project.name, stage, td.id),
-              isConcept:       true,
-            });
-          }
-          log(`      ↳ Concept: ${stageTasks.length} dateless task(s) generated`, 'dl-dim');
-          continue;
-        }
-
-        // Assessment stages: only generate when a date exists in pipeline_data.xlsx.
-        const sd = project.stageDates[stage];
-        if (!sd || !sd.actual) {
-          log(`      ↳ ${stage}: no date in pipeline data — tasks skipped`, 'dl-dim');
-          continue;
-        }
-
-        let generated = 0;
-        for (const td of stageTasks) {
-          const computedDueDate = addDays(sd.actual, -td.days_before);
-          const startDate = td.duration_days != null
-            ? addDays(computedDueDate, -td.duration_days)
-            : null;
-
-          if (computedDueDate < threeMonthsAgo) {
-            log(`      ↳ stale task skipped: "${td.id}" due ${fmtDate(computedDueDate)}`, 'dl-dim');
-            continue;
-          }
-
-          allTasks.push({
-            projectName:     project.name,
-            projectRole:     project.role,
-            stage,
-            taskDef:         td,
-            dueDate:         computedDueDate,
-            startDate,
-            actualStageDate: sd.actual,
-            tickKey:         tickKey(project.name, stage, td.id),
-            isConcept:       false,
-          });
-          generated++;
-        }
-        log(`      ↳ ${stage}: ${generated} task(s) generated (stage date ${fmtDate(sd.actual)})`, 'dl-dim');
-      }
-    }
-
-    // ── 5b. Add custom tasks to allTasks ─────────────────────────────────────
-    for (const ct of appState.customTasks) {
-      const project = projects.find(p => p.name === ct.projectName);
-      if (!project) continue;
-      const dueDate = new Date(ct.dueDate + 'T00:00:00');
-      if (isNaN(dueDate.getTime())) continue;
-      if (dueDate < threeMonthsAgo) continue;
-      allTasks.push({
-        projectName:     ct.projectName,
-        projectRole:     project.role,
-        stage:           ct.stage,
-        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
-        dueDate,
-        startDate:       null,
-        actualStageDate: null,
-        tickKey:         tickKey(ct.projectName, ct.stage, ct.id),
-        isCustom:        true,
-        isConcept:       false,
-      });
-    }
+    const allTasks = buildAllTasks(projects, taskDefs, /* verbose= */ true);
 
     log(`Generated ${allTasks.length} task(s) across ${projects.length} project(s) (incl. ${appState.customTasks.length} custom):`, 'dl-ok');
     for (const t of allTasks) {
@@ -2237,8 +2389,7 @@
     }
 
     // ── Store to appState ─────────────────────────────────────────────────────
-    appState.projects     = projects;
-    appState.taskDefs     = taskDefs;
+    // appState.projects and appState.taskDefs were set early (before buildAllTasks).
     appState.routineTasks = routineDefs;
     appState.allTasks     = allTasks;
 
@@ -2251,22 +2402,23 @@
     // ── 8. Timeline match diagnostic ──────────────────────────────────────────
     logSection('8. TIMELINE MATCH DIAGNOSTIC');
 
-    const tlMonths = getTimelineMonths();
-    log(`Window: ${tlMonths.map(m => m.key + (m.isCurrent ? ' (current)' : '')).join('  ·  ')}`, 'dl-ok');
+    const tlWeeks = getTimelineWeeks();
+    log(`Window: ${tlWeeks.map(w => w.key + (w.isCurrentWeek ? ' (current)' : '')).join('  ·  ')}`, 'dl-ok');
 
     let inWindow = 0, outWindow = 0, nullDates = 0;
     for (const project of projects) {
       const pName = project.name.slice(0, 26);
       for (const [stage, sd] of Object.entries(project.stageDates)) {
         if (!sd || !sd.actual) { nullDates++; continue; }
-        const mk      = toMonthKey(sd.actual);
-        const matched = tlMonths.some(m => m.key === mk);
+        const effDate = getEffectiveStageActual(project.name, stage, sd.actual);
+        const wk      = toWeekKey(effDate);
+        const matched = tlWeeks.some(w => w.key === wk);
         if (matched) {
           inWindow++;
-          log(`   ✓ ${pName}  /  ${stage}  →  ${mk}`, 'dl-ok');
+          log(`   ✓ ${pName}  /  ${stage}  →  week of ${wk}`, 'dl-ok');
         } else {
           outWindow++;
-          log(`   ✗ ${pName}  /  ${stage}  →  ${mk}  (outside window)`, 'dl-warn');
+          log(`   ✗ ${pName}  /  ${stage}  →  week of ${wk}  (outside 12-week window)`, 'dl-warn');
         }
       }
     }
@@ -2275,11 +2427,11 @@
     }
     log('', '');
     if (inWindow > 0) {
-      log(`✓ ${inWindow} stage date(s) fall within the window — cells should be populated`, 'dl-ok');
+      log(`✓ ${inWindow} stage date(s) fall within the 12-week window — cells should be populated`, 'dl-ok');
     } else {
-      log(`✗ 0 stage dates fall within the 4-month window — this is why cells are empty`, 'dl-err');
+      log(`✗ 0 stage dates fall within the 12-week window — this is why cells are empty`, 'dl-err');
       if (outWindow > 0) {
-        log(`  (${outWindow} stage date(s) exist but are outside Feb–May 2026)`, 'dl-warn');
+        log(`  (${outWindow} stage date(s) exist but are outside the window)`, 'dl-warn');
       }
       if (nullDates > 0) {
         log(`  (${nullDates} stage date(s) are null — check raw types above)`, 'dl-warn');
