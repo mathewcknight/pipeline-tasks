@@ -345,6 +345,12 @@
       background: #0d1117;
       border-bottom: 1px solid #30363d;
     }
+    .cl-stage-all-cb {
+      width: 15px; height: 15px;
+      cursor: pointer;
+      accent-color: #388bfd;
+      flex-shrink: 0;
+    }
     .cl-stage-chip {
       display: inline-block;
       padding: 2px 9px;
@@ -1002,18 +1008,15 @@
   // Maps each pipeline Stage value → assessment stages whose tasks should NOT be
   // generated for a new project (i.e. they are already complete).
   // Exception: if ANY tick-state key already exists for a project+stage combination
-  // (meaning tasks were generated in a previous session), those tasks are preserved.
-  // Maps pipeline Stage value → assessment stages whose tasks should NOT be generated
-  // (already completed). Tasks for all other stages are generated if dates are present.
-  // Exception: if localStorage already contains tick-state keys for a skipped stage,
-  // those tasks are preserved (prior-session data takes precedence).
-  const PIPELINE_STAGE_SKIP = {
-    'Concept':                [],
-    'Expression of Interest': ['EOI Panel'],
-    // Full Application: EOI Panel is done; the current Full App Panel assessment is not
-    // a task-generation stage — generate Prescreen, Funding Approval, Approval to Execute.
-    'Full Application':       ['EOI Panel', 'Full App Panel'],
-    'Contract Processing':    ['EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval'],
+  // Maps pipeline Stage value → which assessment stages to generate tasks for.
+  // Stages with a date get real due dates; stages in the list but without a date
+  // get placeholder tasks (isConcept:true, dueDate:null) shown only in the checklist.
+  // Any stage NOT in the list that already has localStorage tick data is also preserved.
+  const PIPELINE_STAGE_INCLUDE = {
+    'Concept':                ['EOI Panel'],
+    'Expression of Interest': ['EOI Panel', 'Prescreen', 'Full App Panel'],
+    'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval', 'Approval to Execute'],
+    'Contract Processing':    ['Funding Approval', 'Approval to Execute'],
   };
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
@@ -2044,56 +2047,56 @@
     const allTasks = [];
 
     for (const project of projects) {
-      // Detect Concept stage: all stage date columns are empty for this project
-      const isConcept = Object.values(project.stageDates).every(sd => sd === null);
+      // Determine which assessment stages to generate based on the pipeline stage column.
+      // Falls back to all stages if the pipeline stage value isn't recognised.
+      const includeBase = PIPELINE_STAGE_INCLUDE[project.pipelineStage] || Object.keys(STAGE_COLUMNS);
+      const stagesToGen = new Set(includeBase);
 
-      if (isConcept) {
-        // Generate all project task defs with dueDate = null (no stage date available yet)
-        log(`   [${project.name}]  — Concept stage (no dates): generating ${taskDefs.length} placeholder task(s)`, 'dl-dim');
-        for (const td of taskDefs) {
-          allTasks.push({
-            projectName:     project.name,
-            projectRole:     project.role,
-            stage:           td.stage,
-            taskDef:         td,
-            dueDate:         null,
-            startDate:       null,
-            actualStageDate: null,
-            tickKey:         tickKey(project.name, td.stage, td.id),
-            isConcept:       true,
-          });
+      // Preserve any stage not in the include list that already has localStorage data
+      // (handles projects that have advanced — their old ticked tasks stay visible).
+      for (const stage of Object.keys(STAGE_COLUMNS)) {
+        if (stagesToGen.has(stage)) continue;
+        const lsPrefix = `${project.name}__${stage}__`;
+        if (Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix))) {
+          stagesToGen.add(stage);
+          log(`   [${project.name}]  preserved stage "${stage}" — existing localStorage data detected`, 'dl-ok');
         }
-        continue; // skip date-based generation below
       }
 
-      // Normal date-based generation
-      const skipStages = PIPELINE_STAGE_SKIP[project.pipelineStage] || [];
-      if (skipStages.length) {
-        log(
-          `   [${project.name}]  pipeline stage "${project.pipelineStage}"` +
-          `  →  skipping: ${skipStages.join(', ')}  (unless prior localStorage data found)`,
-          'dl-warn',
-        );
-      }
+      log(
+        `   [${project.name}]  pipeline stage "${project.pipelineStage || '(none)'}"` +
+        `  →  generating: ${[...stagesToGen].join(', ')}`,
+        'dl-dim',
+      );
 
-      for (const [stage, sd] of Object.entries(project.stageDates)) {
-        if (!sd || !sd.actual) continue;
+      // Iterate in canonical stage order so checklist grouping is stable.
+      for (const stage of Object.keys(STAGE_COLUMNS)) {
+        if (!stagesToGen.has(stage)) continue;
 
-        if (skipStages.includes(stage)) {
-          const lsPrefix  = `${project.name}__${stage}__`;
-          const hasLegacy = Object.keys(appState.tickState).some(k => k.startsWith(lsPrefix));
-          if (!hasLegacy) {
-            log(`      ↳ skipped stage "${stage}" (no prior tasks found in localStorage)`, 'dl-dim');
-            continue;
-          }
-          log(`      ↳ preserved stage "${stage}" — existing localStorage data detected`, 'dl-ok');
-        }
-
+        const sd         = project.stageDates[stage];
         const stageTasks = taskDefs.filter(t => t.stage === stage);
+
+        if (!sd || !sd.actual) {
+          // No date for this stage → placeholder tasks (checklist only, not open tasks)
+          for (const td of stageTasks) {
+            allTasks.push({
+              projectName:     project.name,
+              projectRole:     project.role,
+              stage,
+              taskDef:         td,
+              dueDate:         null,
+              startDate:       null,
+              actualStageDate: null,
+              tickKey:         tickKey(project.name, stage, td.id),
+              isConcept:       true,
+            });
+          }
+          continue;
+        }
+
+        // Stage has a date → normal date-based generation
         for (const td of stageTasks) {
-          // dueDate: offset_direction 'before' → subtract, 'after' → add
           const computedDueDate = addDays(sd.actual, -td.days_before);
-          // startDate: derived from original computed due date + duration_days (never from override)
           const startDate = td.duration_days != null
             ? addDays(computedDueDate, -td.duration_days)
             : null;
@@ -2382,9 +2385,18 @@
       if (!stageTasks.length) continue;
       hasAny = true;
 
-      const sc = STAGE_COLORS[stage];
+      const sc           = STAGE_COLORS[stage];
+      const tickedCount  = stageTasks.filter(t => !!appState.tickState[t.tickKey]).length;
+      const allTicked    = tickedCount === stageTasks.length;
+      const someTicked   = tickedCount > 0 && !allTicked;
       html += `<div class="cl-stage-group">`;
       html += `<div class="cl-stage-heading">
+        <input type="checkbox" class="cl-stage-all-cb"
+          data-stage="${esc(stage)}"
+          data-project="${esc(projectName)}"
+          ${allTicked ? 'checked' : ''}
+          ${someTicked ? 'data-indeterminate="true"' : ''}
+          title="${allTicked ? 'Untick all' : 'Tick all'} ${esc(stage)} tasks">
         <span class="cl-stage-chip"
           style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
           ${esc(stage)}
@@ -2453,6 +2465,24 @@
 
     html += '</div>'; // cl-tasks-wrap
     container.innerHTML = html;
+
+    // Stage tick-all checkboxes — set indeterminate state (can't be done in HTML)
+    // and wire the click handler.
+    container.querySelectorAll('.cl-stage-all-cb').forEach(cb => {
+      if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
+      cb.addEventListener('change', e => {
+        const stage   = e.target.dataset.stage;
+        const project = e.target.dataset.project;
+        const newVal  = e.target.checked;
+        appState.allTasks
+          .filter(t => t.projectName === project && t.stage === stage)
+          .forEach(t => setTick(t.tickKey, newVal));
+        renderChecklistTasks(project);
+        renderOpenTasks();
+        renderTimeline();
+        renderSummaryCards();
+      });
+    });
 
     // Checkboxes
     container.querySelectorAll('.cl-checkbox').forEach(cb => {
