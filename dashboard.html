@@ -1026,7 +1026,7 @@
   };
 
   // Column in pipeline_data.xlsx that holds the approval authority (e.g. "Board", "CEO", "CIO")
-  const APPROVAL_AUTHORITY_COL = 'Approval Authority';
+  const APPROVAL_AUTHORITY_COL = 'Forecasted Application Approver';
 
   // Column in pipeline_data.xlsx that holds the project's current pipeline stage.
   const PIPELINE_STAGE_COL = 'Stage';
@@ -1042,7 +1042,7 @@
   // is also preserved (stage-advancement safety net).
   // Lookup is case-insensitive to handle minor capitalisation differences.
   const PIPELINE_STAGE_INCLUDE = {
-    'Concept':                ['Concept', 'EOI Panel'],
+    'Concept':                ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel'],
     'Expression of Interest': ['EOI Panel', 'Prescreen', 'Full App Panel'],
     'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval'],
     'Contract Processing':    ['Approval to Execute'],
