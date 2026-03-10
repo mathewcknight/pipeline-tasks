@@ -524,6 +524,78 @@
     }
     .count-badge.has-items { background: #0c2d6b; color: #79c0ff; border-color: #388bfd; }
 
+    /* ══ Next week with panel ════════════════════════════════════════════════════ */
+    #nextWeekWith {
+      width: 42%;
+      min-width: 0;
+      margin-bottom: 24px;
+    }
+    .nww-controls {
+      margin-bottom: 10px;
+    }
+    .nww-select {
+      width: 100%;
+      max-width: 320px;
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 0.84rem;
+    }
+    .nww-select:focus { outline: none; border-color: #388bfd; }
+    .nww-project-block {
+      margin-bottom: 16px;
+    }
+    .nww-project-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0 6px 0;
+      border-bottom: 1px solid #21262d;
+      margin-bottom: 6px;
+    }
+    .nww-project-name {
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: #c9d1d9;
+    }
+    .nww-no-tasks {
+      padding: 6px 4px;
+      color: #6e7681;
+      font-size: 0.80rem;
+      font-style: italic;
+    }
+    .nww-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .nww-th {
+      text-align: left;
+      padding: 4px 8px 4px 4px;
+      color: #8b949e;
+      font-weight: 600;
+      border-bottom: 1px solid #21262d;
+      white-space: nowrap;
+    }
+    .nww-th-date { width: 84px; }
+    .nww-th-stage { width: 110px; }
+    .nww-td {
+      padding: 4px 8px 4px 4px;
+      color: #c9d1d9;
+      border-bottom: 1px solid #161b22;
+      vertical-align: middle;
+    }
+    .nww-td-date {
+      color: #8b949e;
+      white-space: nowrap;
+      font-size: 0.78rem;
+    }
+    .nww-row:hover td { background: #1c2128; }
+    .nww-row-event td { color: #8b949e; font-style: italic; }
+    .nww-event-marker { color: #d29922; margin-right: 4px; }
+
     /* ══ Debug panel toggle ══════════════════════════════════════════════════════ */
     .debug-toggle {
       display: flex;
@@ -920,6 +992,19 @@
 
   </div>
 
+  <!-- Next week with: panel -->
+  <div id="nextWeekWith" style="display:none">
+    <div class="panel-header">
+      <p class="section-label">Next week with:</p>
+    </div>
+    <div class="nww-controls">
+      <select id="nwwSelect" class="nww-select">
+        <option value="">— Select a person —</option>
+      </select>
+    </div>
+    <div id="nwwList" class="cl-empty">Select a person above to see their tasks for the next 7 days.</div>
+  </div>
+
   <!-- Debug panel (collapsed by default) -->
   <div id="debugToggle" class="debug-toggle" role="button" aria-expanded="false" tabindex="0">
     <span class="debug-chevron" id="debugChevron">&#9658;</span>
@@ -1077,6 +1162,32 @@
 
   // Impact Team → subtle tinted background for the project name column in the timeline.
   // Each value is a full CSS `background` shorthand layering the tint over the base dark colour.
+  // ── Next week with: constants ────────────────────────────────────────────────
+  // The 5 people columns to scan (all projects, not just MK's).
+  const NWW_PEOPLE_COLS = [
+    'Investment Analyst',
+    'Investment Analyst (Assisting)',
+    'Investment Manager',
+    'Investment Associate Director',
+    'General Manager',
+  ];
+  // Display role label for each of those columns.
+  const NWW_ROLE_FOR_COL = {
+    'Investment Analyst':              'Analyst',
+    'Investment Analyst (Assisting)':  'Analyst Assisting',
+    'Investment Manager':              'Manager',
+    'Investment Associate Director':   'Assoc. Director',
+    'General Manager':                 'General Manager',
+  };
+  // Badge colours — reuse existing palette where roles overlap, add new ones.
+  const NWW_ROLE_COLORS = {
+    'Analyst':          { bg: '#1e3a5f', text: '#bfdbfe', border: '#3b82f6' },
+    'Analyst Assisting':{ bg: '#3b1d6e', text: '#e9d5ff', border: '#a855f7' },
+    'Manager':          { bg: '#134e4a', text: '#99f6e4', border: '#14b8a6' },
+    'Assoc. Director':  { bg: '#1a3a2e', text: '#6ee7b7', border: '#059669' },
+    'General Manager':  { bg: '#3a1a1a', text: '#fca5a5', border: '#dc2626' },
+  };
+
   const IMPACT_TEAM_BG = {
     'Solar':            'linear-gradient(rgba(234,179,8,0.13),rgba(234,179,8,0.13)),#161b22',
     'Transport':        'linear-gradient(rgba(34,197,94,0.10),rgba(34,197,94,0.10)),#161b22',
@@ -1137,8 +1248,9 @@
     editingTickKey:   null,  // tickKey of the task whose inline edit row is open
     editingPanel:     null,  // 'checklist' | 'opentasks'
     editingStageKey:  null,  // "ProjectName__Stage" for timeline diamond being edited
-    showActiveOnly:    true,  // start-date filter: true = hide tasks not yet started
-    showNext3Weeks:    true,  // date-window filter: true = only show tasks due within 3 weeks
+    showActiveOnly:    true,   // start-date filter: true = hide tasks not yet started
+    showNext3Weeks:    true,   // date-window filter: true = only show tasks due within 3 weeks
+    pipelineRows:      [],     // raw rows from pipeline_data.xlsx "MK Pipeline" sheet (all projects)
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2075,7 +2187,7 @@
         projectName:     ct.projectName,
         projectRole:     project ? project.role : '',
         stage:           ct.stage,
-        taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
+        taskDef:         { id: ct.id, label: ct.label, role: ct.role || (project ? project.role : ''), stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
         dueDate,
         startDate:       null,
         actualStageDate: null,
@@ -2327,8 +2439,9 @@
 
     // Store projects + taskDefs to appState before calling buildAllTasks so
     // getEffectiveStageActual (which reads appState.overrides) works correctly.
-    appState.projects = projects;
-    appState.taskDefs = taskDefs;
+    appState.projects    = projects;
+    appState.taskDefs    = taskDefs;
+    appState.pipelineRows = pipelineRows;
 
     const allTasks = buildAllTasks(projects, taskDefs, /* verbose= */ true);
 
@@ -2398,11 +2511,12 @@
     appState.routineTasks = routineDefs;
     appState.allTasks     = allTasks;
 
-    // ── Render timeline, checklist, open tasks & summary cards ───────────────
+    // ── Render timeline, checklist, open tasks, summary cards & next-week panel ─
     renderTimeline();
     renderChecklist();
     renderOpenTasks();
     renderSummaryCards();
+    renderNextWeekWith();
 
     // ── 8. Timeline match diagnostic ──────────────────────────────────────────
     logSection('8. TIMELINE MATCH DIAGNOSTIC');
@@ -2937,6 +3051,170 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // NEXT WEEK WITH
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Returns the display role for `name` on the given raw pipeline row (normalised keys).
+  function nwwPersonRoleOnRow(name, rowNorm) {
+    for (const col of NWW_PEOPLE_COLS) {
+      if ((rowNorm[col] || '').trim() === name) return NWW_ROLE_FOR_COL[col] || col;
+    }
+    return '';
+  }
+
+  // Returns a normalised (trimmed keys) version of a pipeline row.
+  function nwwNormRow(row) {
+    const out = {};
+    for (const [k, v] of Object.entries(row)) out[k.trim()] = v;
+    return out;
+  }
+
+  // Populate dropdown + show/hide the panel. Called after data loads.
+  function renderNextWeekWith() {
+    const container = document.getElementById('nextWeekWith');
+    if (!appState.pipelineRows.length) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+
+    // Collect unique names from the 5 people columns, excluding MK and empty.
+    const nameSet = new Set();
+    for (const row of appState.pipelineRows) {
+      const rn = nwwNormRow(row);
+      for (const col of NWW_PEOPLE_COLS) {
+        const n = (rn[col] || '').trim();
+        if (n && n !== MK_NAME) nameSet.add(n);
+      }
+    }
+    const names = [...nameSet].sort();
+
+    const select  = document.getElementById('nwwSelect');
+    const prevVal = select.value;
+    select.innerHTML = '<option value="">— Select a person —</option>';
+    for (const name of names) {
+      const opt = document.createElement('option');
+      opt.value       = name;
+      opt.textContent = name;
+      if (name === prevVal) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    if (select.value) {
+      renderNwwForPerson(select.value);
+    } else {
+      document.getElementById('nwwList').innerHTML =
+        '<div class="cl-empty">Select a person above to see their tasks for the next 7 days.</div>';
+    }
+  }
+
+  // Render the task table for a specific person.
+  function renderNwwForPerson(personName) {
+    const listEl  = document.getElementById('nwwList');
+    const today   = new Date(); today.setHours(0, 0, 0, 0);
+    const in7Days = addDays(today, 7);
+
+    // Find all projects (from MK's list) where this person also appears.
+    const matchedProjects = appState.projects.filter(proj => {
+      const raw = appState.pipelineRows.find(r =>
+        (r['Project: Project Name'] || '').trim() === proj.name
+      );
+      if (!raw) return false;
+      const rn = nwwNormRow(raw);
+      return NWW_PEOPLE_COLS.some(col => (rn[col] || '').trim() === personName);
+    });
+
+    if (!matchedProjects.length) {
+      listEl.innerHTML = `<div class="cl-empty">No shared projects found with ${esc(personName)}.</div>`;
+      return;
+    }
+
+    let html = '';
+
+    for (const proj of matchedProjects) {
+      // Determine this person's role badge on this project.
+      const raw       = appState.pipelineRows.find(r =>
+        (r['Project: Project Name'] || '').trim() === proj.name
+      );
+      const personRole = raw ? nwwPersonRoleOnRow(personName, nwwNormRow(raw)) : '';
+      const rc         = NWW_ROLE_COLORS[personRole] || NWW_ROLE_COLORS['Analyst'];
+
+      // Tasks for this project due in [today, today+7], unticked, non-concept.
+      const tasks = appState.allTasks
+        .filter(t =>
+          t.projectName === proj.name &&
+          !appState.tickState[t.tickKey] &&
+          !t.isConcept
+        )
+        .filter(t => {
+          const due = getEffectiveDueDate(t);
+          return due && due >= today && due <= in7Days;
+        });
+
+      // Assessment stage events falling in [today, today+7].
+      const stageEvents = [];
+      for (const [stage, sd] of Object.entries(proj.stageDates)) {
+        if (!sd || !sd.actual) continue;
+        const eff = getEffectiveStageActual(proj.name, stage, sd.actual);
+        if (eff >= today && eff <= in7Days) stageEvents.push({ stage, date: eff });
+      }
+
+      // Project header.
+      html += `<div class="nww-project-block">
+        <div class="nww-project-header">
+          <span class="nww-project-name">${esc(proj.name)}</span>
+          ${personRole
+            ? `<span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(personRole)}</span>`
+            : ''}
+        </div>`;
+
+      // Merge tasks + events, sort by date.
+      const combinedRows = [
+        ...tasks.map(t => ({ kind: 'task',  t, date: getEffectiveDueDate(t) })),
+        ...stageEvents.map(e => ({ kind: 'event', e, date: e.date })),
+      ].sort((a, b) => a.date - b.date);
+
+      if (!combinedRows.length) {
+        html += `<div class="nww-no-tasks">No tasks due this week</div>`;
+      } else {
+        html += `<table class="nww-table"><thead><tr>
+          <th class="nww-th">Task</th>
+          <th class="nww-th nww-th-stage">Stage</th>
+          <th class="nww-th nww-th-date">Start</th>
+          <th class="nww-th nww-th-date">Due</th>
+        </tr></thead><tbody>`;
+
+        for (const row of combinedRows) {
+          if (row.kind === 'task') {
+            const t        = row.t;
+            const sc       = t.stage ? (STAGE_COLORS[t.stage] || null) : null;
+            const effStart = getEffectiveStartDate(t);
+            const effDue   = getEffectiveDueDate(t);
+            html += `<tr class="nww-row">
+              <td class="nww-td">${esc(t.taskDef.label)}</td>
+              <td class="nww-td">${sc
+                ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
+                : '—'}</td>
+              <td class="nww-td nww-td-date">${effStart ? fmtDate(effStart) : '—'}</td>
+              <td class="nww-td nww-td-date">${effDue ? fmtDate(effDue) : '—'}</td>
+            </tr>`;
+          } else {
+            const e  = row.e;
+            const sc = STAGE_COLORS[e.stage] || STAGE_COLORS['EOI Panel'];
+            html += `<tr class="nww-row nww-row-event">
+              <td class="nww-td"><span class="nww-event-marker">◆</span>${esc(e.stage)} assessment</td>
+              <td class="nww-td"><span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(e.stage)}</span></td>
+              <td class="nww-td nww-td-date">—</td>
+              <td class="nww-td nww-td-date">${fmtDate(e.date)}</td>
+            </tr>`;
+          }
+        }
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+    }
+
+    listEl.innerHTML = html;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // BUTTON HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2991,6 +3269,17 @@
     toggle.addEventListener('click', toggleDebug);
     toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDebug(); } });
   })();
+
+  // Next week with: person dropdown
+  document.getElementById('nwwSelect').addEventListener('change', e => {
+    const name = e.target.value;
+    if (name) {
+      renderNwwForPerson(name);
+    } else {
+      document.getElementById('nwwList').innerHTML =
+        '<div class="cl-empty">Select a person above to see their tasks for the next 7 days.</div>';
+    }
+  });
 
   // Start-date filter toggle
   document.getElementById('btn3WeekFilter').addEventListener('click', () => {
