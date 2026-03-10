@@ -16,9 +16,9 @@
 ║                               Row 1: month names                            ║
 ║                               Row 2+: Panel Meeting / Board Meeting dates   ║
 ║    task_definitions.xlsx    sheet 1: "Project Tasks"                        ║
-║                               cols: id, label, role, stage,                 ║
-║                                     days_offset, offset_direction,          ║
-║                                     duration_days                           ║
+║                               cols: id, Task name, Event,                  ║
+║                                     Usual Task Owner, days_offset_due,      ║
+║                                     offset_direction, duration_days         ║
 ║                             sheet 2: "Routine Tasks"                        ║
 ║                               cols: id, label, role, impact_team,           ║
 ║                                     start_date, interval_days               ║
@@ -874,6 +874,7 @@
         <select id="projectSelect" class="cl-project-select">
           <option value="">— Select a project —</option>
         </select>
+        <span id="projectRoleBadge"></span>
       </div>
       <div id="checklistTasks"></div>
     </div>
@@ -1016,9 +1017,9 @@
   // is also preserved (stage-advancement safety net).
   // Lookup is case-insensitive to handle minor capitalisation differences.
   const PIPELINE_STAGE_INCLUDE = {
-    'Concept':                ['Concept'],
+    'Concept':                ['Concept', 'EOI Panel'],
     'Expression of Interest': ['EOI Panel', 'Prescreen', 'Full App Panel'],
-    'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval', 'Approval to Execute'],
+    'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval'],
     'Contract Processing':    ['Approval to Execute'],
   };
 
@@ -1658,16 +1659,16 @@
 
   // Parse Sheet 1 (Project Tasks) from task_definitions.xlsx.
   // Expected column headers (exact, case-sensitive):
-  //   id | Task name | Stage | Usual Task Owner | days_offset_due | offset_direction | duration_days
+  //   id | Task name | Event | Usual Task Owner | days_offset_due | offset_direction | duration_days
   // Returns array of normalised task def objects with derived `days_before`.
   function parseProjectTasksSheet(rows) {
-    // 'Concept' is a valid stage even though it has no assessment date column.
+    // 'Concept' is a valid event/stage even though it has no assessment date column.
     const VALID_STAGES = new Set([...Object.keys(STAGE_COLUMNS), 'Concept']);
     return rows.map(row => {
       const id               = String(row['id']                 || '').trim();
       const label            = String(row['Task name']          || '').trim();
       const role             = String(row['Usual Task Owner']   || 'Analyst').trim();
-      const stage            = String(row['Stage']              || '').trim();
+      const stage            = String(row['Event']              || '').trim();
       const days_offset      = parseFloat(row['days_offset_due']) || 0;
       const offset_direction = String(row['offset_direction']   || 'before').trim().toLowerCase();
       const dur              = row['duration_days'];
@@ -2368,6 +2369,20 @@
     return '';
   }
 
+  // Populate the role badge next to the project dropdown.
+  function updateProjectRoleBadge(projectName) {
+    const badge = document.getElementById('projectRoleBadge');
+    if (!badge) return;
+    if (!projectName) { badge.innerHTML = ''; return; }
+    const project = appState.projects.find(p => p.name === projectName);
+    if (!project) { badge.innerHTML = ''; return; }
+    const rc = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
+    badge.innerHTML = `<span class="cl-role-badge"
+      style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+      My role: ${esc(project.role)}
+    </span>`;
+  }
+
   // Rebuild the dropdown and (re-)render tasks for the currently selected project.
   function renderChecklist() {
     const container = document.getElementById('checklist');
@@ -2386,6 +2401,8 @@
       if (p.name === prevVal) opt.selected = true;
       select.appendChild(opt);
     }
+
+    updateProjectRoleBadge(select.value);
 
     if (select.value) {
       renderChecklistTasks(select.value);
@@ -2440,7 +2457,8 @@
         const effDue    = getEffectiveDueDate(t);
         const effStart  = getEffectiveStartDate(t);
         const urgency   = ticked ? '' : dateUrgency(effDue);
-        const rc        = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
+        const taskRole  = t.taskDef.role || t.projectRole;
+        const rc        = ROLE_COLORS[taskRole] || ROLE_COLORS['Analyst'];
         const hasOv     = !!appState.overrides[`override__${t.tickKey}`];
         const isEditing = appState.editingTickKey === t.tickKey && appState.editingPanel === 'checklist';
 
@@ -2478,7 +2496,7 @@
             <span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
               <span class="cl-role-badge"
                 style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-                ${esc(t.projectRole)}
+                ${esc(taskRole)}
               </span>
               ${t.isCustom ? `<button class="btn-delete-task cl-delete-custom" data-tick-key="${esc(t.tickKey)}" data-project="${esc(projectName)}" title="Delete custom task">✕</button>` : ''}
             </span>
@@ -2807,6 +2825,7 @@
 
   // Project dropdown
   document.getElementById('projectSelect').addEventListener('change', e => {
+    updateProjectRoleBadge(e.target.value);
     if (e.target.value) {
       renderChecklistTasks(e.target.value);
     } else {
