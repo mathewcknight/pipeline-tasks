@@ -38,7 +38,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Grant Pipeline Dashboard</title>
+  <title>MK MEGADASH</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -203,6 +203,17 @@
     }
     .tl-label-inner { display: flex; flex-direction: row; align-items: center; gap: 7px; flex-wrap: wrap; }
     .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; word-break: break-word; white-space: normal; }
+    .tl-info-chip {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.60rem;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .tl-info-chip-stage    { background: #1c2128; color: #8b949e; border: 1px solid #30363d; }
+    .tl-info-chip-next     { background: #102030; color: #79c0ff; border: 1px solid #1f6feb; }
     .tl-role-badge {
       display: inline-block;
       padding: 1px 6px;
@@ -925,7 +936,7 @@
   <!-- Page header: title left, summary cards right -->
   <div class="page-header">
     <div class="page-header-left">
-      <h1>Grant Pipeline Dashboard</h1>
+      <h1>MK MEGADASH</h1>
       <p class="subtitle">Mathew Knight — Grant Pipeline Manager <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
     </div>
     <!-- Summary cards (hidden until data loads) -->
@@ -1734,10 +1745,9 @@
       const idx = weeks.findIndex(w => toWeekKey(effDate) === w.key);
       if (idx >= curIdx && idx < minFuture) minFuture = idx;
     }
-    if (minFuture === curIdx)     return 0; // this week
-    if (minFuture === curIdx + 1) return 1; // next week
-    if (minFuture <  weeks.length) return 2; // later in window
-    return 3; // nothing in window
+    // Return the actual week index so projects sort week-by-week (current first, then +1, +2 …).
+    // Projects with no upcoming assessment in the window sort last (weeks.length).
+    return minFuture;
   }
 
   function getSortedProjects() {
@@ -1776,6 +1786,19 @@
 
       // Label cell (sticky) — tinted by Impact Team if recognised
       const teamBg = IMPACT_TEAM_BG[(project.impactTeam || '').trim()];
+
+      // Next upcoming assessment: earliest stage date at or after today.
+      const tlToday = new Date(); tlToday.setHours(0, 0, 0, 0);
+      let nextAssessStage = null, nextAssessDate = null;
+      for (const [stage, sd] of Object.entries(project.stageDates)) {
+        if (!sd || !sd.actual) continue;
+        const eff = getEffectiveStageActual(project.name, stage, sd.actual);
+        if (eff >= tlToday && (!nextAssessDate || eff < nextAssessDate)) {
+          nextAssessDate  = eff;
+          nextAssessStage = stage;
+        }
+      }
+
       html += `
         <td class="tl-label"${teamBg ? ` style="background:${teamBg}"` : ''}>
           <div class="tl-label-inner">
@@ -1784,6 +1807,12 @@
               style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
               ${esc(project.role)}
             </span>
+            ${project.pipelineStage
+              ? `<span class="tl-info-chip tl-info-chip-stage">Stage: ${esc(project.pipelineStage)}</span>`
+              : ''}
+            ${nextAssessStage
+              ? `<span class="tl-info-chip tl-info-chip-next">Next: ${esc(nextAssessStage)}</span>`
+              : ''}
           </div>
         </td>`;
 
@@ -3112,7 +3141,7 @@
     const in7Days = addDays(today, 7);
 
     // Find all projects (from MK's list) where this person also appears.
-    const matchedProjects = appState.projects.filter(proj => {
+    const baseMatches = appState.projects.filter(proj => {
       const raw = appState.pipelineRows.find(r =>
         (r['Project: Project Name'] || '').trim() === proj.name
       );
@@ -3121,22 +3150,13 @@
       return NWW_PEOPLE_COLS.some(col => (rn[col] || '').trim() === personName);
     });
 
-    if (!matchedProjects.length) {
+    if (!baseMatches.length) {
       listEl.innerHTML = `<div class="cl-empty">No shared projects found with ${esc(personName)}.</div>`;
       return;
     }
 
-    let html = '';
-
-    for (const proj of matchedProjects) {
-      // Determine this person's role badge on this project.
-      const raw       = appState.pipelineRows.find(r =>
-        (r['Project: Project Name'] || '').trim() === proj.name
-      );
-      const personRole = raw ? nwwPersonRoleOnRow(personName, nwwNormRow(raw)) : '';
-      const rc         = NWW_ROLE_COLORS[personRole] || NWW_ROLE_COLORS['Analyst'];
-
-      // Tasks for this project due in [today, today+7], unticked, non-concept.
+    // Compute per-project earliest due date in window, then sort: soonest first, no-tasks last.
+    const projData = baseMatches.map(proj => {
       const tasks = appState.allTasks
         .filter(t =>
           t.projectName === proj.name &&
@@ -3148,7 +3168,6 @@
           return due && due >= today && due <= in7Days;
         });
 
-      // Assessment stage events falling in [today, today+7].
       const stageEvents = [];
       for (const [stage, sd] of Object.entries(proj.stageDates)) {
         if (!sd || !sd.actual) continue;
@@ -3156,21 +3175,31 @@
         if (eff >= today && eff <= in7Days) stageEvents.push({ stage, date: eff });
       }
 
-      // Project header.
-      html += `<div class="nww-project-block">
-        <div class="nww-project-header">
-          <span class="nww-project-name">${esc(proj.name)}</span>
-          ${personRole
-            ? `<span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(personRole)}</span>`
-            : ''}
-        </div>`;
-
-      // Merge tasks + events, sort by date.
       const combinedRows = [
         ...tasks.map(t => ({ kind: 'task',  t, date: getEffectiveDueDate(t) })),
         ...stageEvents.map(e => ({ kind: 'event', e, date: e.date })),
       ].sort((a, b) => a.date - b.date);
 
+      const earliestDate = combinedRows.length ? combinedRows[0].date : null;
+      return { proj, tasks, stageEvents, combinedRows, earliestDate };
+    });
+
+    // Projects with content in window first (sorted by earliest date), rest at bottom.
+    projData.sort((a, b) => {
+      if (a.earliestDate && b.earliestDate) return a.earliestDate - b.earliestDate;
+      if (a.earliestDate) return -1;
+      if (b.earliestDate) return 1;
+      return 0;
+    });
+
+    let html = '';
+
+    for (const { proj, combinedRows } of projData) {
+      // Project header — name only, no role chip.
+      html += `<div class="nww-project-block">
+        <div class="nww-project-header">
+          <span class="nww-project-name">${esc(proj.name)}</span>
+        </div>`;
       if (!combinedRows.length) {
         html += `<div class="nww-no-tasks">No tasks due this week</div>`;
       } else {
