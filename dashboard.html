@@ -939,6 +939,7 @@
       <div class="modal-field">
         <label class="modal-label" for="ctStage">Stage</label>
         <select id="ctStage" class="modal-select">
+          <option value="">— none —</option>
           <option value="EOI Panel">EOI Panel</option>
           <option value="Prescreen">Prescreen</option>
           <option value="Full App Panel">Full App Panel</option>
@@ -957,6 +958,7 @@
       <div class="modal-field">
         <label class="modal-label" for="ctRole">Usual Task Owner</label>
         <select id="ctRole" class="modal-select">
+          <option value="">— none —</option>
           <option value="Analyst">Analyst</option>
           <option value="Analyst Assisting">Analyst Assisting</option>
           <option value="Manager">Manager</option>
@@ -2062,13 +2064,14 @@
     // Custom tasks
     for (const ct of appState.customTasks) {
       const project = projects.find(p => p.name === ct.projectName);
-      if (!project) continue;
+      // Skip if a project name is set but no longer exists in pipeline data
+      if (ct.projectName && !project) continue;
       const dueDate = new Date(ct.dueDate + 'T00:00:00');
       if (isNaN(dueDate.getTime())) continue;
       if (dueDate < threeMonthsAgo) continue;
       allTasks.push({
         projectName:     ct.projectName,
-        projectRole:     project.role,
+        projectRole:     project ? project.role : '',
         stage:           ct.stage,
         taskDef:         { id: ct.id, label: ct.label, role: ct.role || project.role, stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
         dueDate,
@@ -2828,17 +2831,18 @@
       }
 
       // Project task row
-      const sc      = t.stage ? STAGE_COLORS[t.stage] : null;
-      const rc      = ROLE_COLORS[t.projectRole] || ROLE_COLORS['Analyst'];
-      const effDue  = getEffectiveDueDate(t);
-      const effSt   = getEffectiveStartDate(t);
-      const urgency = dateUrgency(effDue);
-      const rowCls  = urgency ? ` cl-${urgency}` : '';
-      const hasOv   = !!appState.overrides[`override__${t.tickKey}`];
+      const sc       = t.stage ? STAGE_COLORS[t.stage] : null;
+      const rowRole  = t.taskDef.role || t.projectRole;
+      const rc       = ROLE_COLORS[rowRole] || ROLE_COLORS['Analyst'];
+      const effDue   = getEffectiveDueDate(t);
+      const effSt    = getEffectiveStartDate(t);
+      const urgency  = dateUrgency(effDue);
+      const rowCls   = urgency ? ` cl-${urgency}` : '';
+      const hasOv    = !!appState.overrides[`override__${t.tickKey}`];
 
       html += `
         <tr class="ot-row${rowCls}">
-          <td class="ot-td ot-td-project" title="${esc(t.projectName)}">${esc(truncate(t.projectName, 22))}</td>
+          <td class="ot-td ot-td-project" title="${esc(t.projectName)}">${t.projectName ? esc(truncate(t.projectName, 22)) : '—'}</td>
           <td class="ot-td">${sc
             ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
             : '—'}</td>
@@ -2847,9 +2851,9 @@
             ${t.isCustom ? '<span class="custom-badge" style="margin-left:4px">custom</span>' : ''}
           </td>
           <td class="ot-td">
-            <span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(t.projectRole)}
-            </span>
+            ${rowRole
+              ? `<span class="cl-role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(rowRole)}</span>`
+              : '—'}
           </td>
           <td class="ot-td ot-td-start">${effSt ? esc(fmtDate(effSt)) : '—'}</td>
           <td class="ot-td ot-td-due${hasOv ? ' cl-overridden' : ''}">
@@ -3002,8 +3006,8 @@
     const ctSave    = document.getElementById('ctSave');
 
     function openModal() {
-      // Populate project dropdown with current projects
-      ctProject.innerHTML = '';
+      // Populate project dropdown — blank option first, then current projects
+      ctProject.innerHTML = '<option value="">— none —</option>';
       for (const p of getSortedProjects()) {
         const opt = document.createElement('option');
         opt.value = p.name;
@@ -3041,7 +3045,6 @@
       const dueDateStr  = ctDueDate.value;
       const role        = ctRole.value;
 
-      if (!projectName) { alert('Please select a project.'); return; }
       if (!label)        { alert('Please enter a task name.'); return; }
       if (!dueDateStr)   { alert('Please select a due date.'); return; }
 
@@ -3055,20 +3058,19 @@
 
       // Add directly to allTasks (no full reload needed)
       const project = appState.projects.find(p => p.name === projectName);
-      if (project) {
-        appState.allTasks.push({
-          projectName,
-          projectRole:     project.role,
-          stage,
-          taskDef:         { id, label, role, stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
-          dueDate,
-          startDate:       null,
-          actualStageDate: null,
-          tickKey:         tickKey(projectName, stage, id),
-          isCustom:        true,
-          isConcept:       false,
-        });
-      }
+      const projectRole = project ? project.role : '';
+      appState.allTasks.push({
+        projectName,
+        projectRole,
+        stage,
+        taskDef:         { id, label, role, stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
+        dueDate,
+        startDate:       null,
+        actualStageDate: null,
+        tickKey:         tickKey(projectName, stage, id),
+        isCustom:        true,
+        isConcept:       false,
+      });
 
       saveState();
       renderOpenTasks();
