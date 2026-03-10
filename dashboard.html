@@ -1009,14 +1009,17 @@
   // generated for a new project (i.e. they are already complete).
   // Exception: if ANY tick-state key already exists for a project+stage combination
   // Maps pipeline Stage value → which assessment stages to generate tasks for.
-  // Stages with a date get real due dates; stages in the list but without a date
-  // get placeholder tasks (isConcept:true, dueDate:null) shown only in the checklist.
-  // Any stage NOT in the list that already has localStorage tick data is also preserved.
+  // 'Concept' stage tasks have no assessment date — they always appear in the
+  // checklist with '—' due date. All other stages only generate tasks when a
+  // date is present in pipeline_data.xlsx.
+  // Any stage outside the include list that already has localStorage tick data
+  // is also preserved (stage-advancement safety net).
+  // Lookup is case-insensitive to handle minor capitalisation differences.
   const PIPELINE_STAGE_INCLUDE = {
-    'Concept':                ['EOI Panel'],
+    'Concept':                ['Concept'],
     'Expression of Interest': ['EOI Panel', 'Prescreen', 'Full App Panel'],
     'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval', 'Approval to Execute'],
-    'Contract Processing':    ['Funding Approval', 'Approval to Execute'],
+    'Contract Processing':    ['Approval to Execute'],
   };
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
@@ -1028,6 +1031,7 @@
 
   // Stage chip colours — dark bg tones with matching text/border for dark theme
   const STAGE_COLORS = {
+    'Concept':             { bg: '#1c2128', text: '#8b949e', border: '#4a5568' },
     'EOI Panel':           { bg: '#451a03', text: '#fde68a', border: '#d97706' },
     'Prescreen':           { bg: '#431407', text: '#fed7aa', border: '#ea580c' },
     'Full App Panel':      { bg: '#0c3344', text: '#a5f3fc', border: '#0891b2' },
@@ -1657,7 +1661,8 @@
   //   id | Task name | Stage | Usual Task Owner | days_offset_due | offset_direction | duration_days
   // Returns array of normalised task def objects with derived `days_before`.
   function parseProjectTasksSheet(rows) {
-    const VALID_STAGES = new Set(Object.keys(STAGE_COLUMNS));
+    // 'Concept' is a valid stage even though it has no assessment date column.
+    const VALID_STAGES = new Set([...Object.keys(STAGE_COLUMNS), 'Concept']);
     return rows.map(row => {
       const id               = String(row['id']                 || '').trim();
       const label            = String(row['Task name']          || '').trim();
@@ -2047,13 +2052,26 @@
     const allTasks = [];
 
     for (const project of projects) {
-      // Determine which assessment stages to generate based on the pipeline stage column.
-      // Falls back to all stages if the pipeline stage value isn't recognised.
-      const includeBase = PIPELINE_STAGE_INCLUDE[project.pipelineStage] || Object.keys(STAGE_COLUMNS);
+      // Case-insensitive lookup so minor capitalisation differences in the
+      // pipeline Stage column don't silently drop all tasks.
+      const psLower    = (project.pipelineStage || '').toLowerCase();
+      const matchedKey = Object.keys(PIPELINE_STAGE_INCLUDE).find(k => k.toLowerCase() === psLower);
+      const includeBase = matchedKey
+        ? PIPELINE_STAGE_INCLUDE[matchedKey]
+        : Object.keys(STAGE_COLUMNS); // unrecognised stage → all assessment stages
+
       const stagesToGen = new Set(includeBase);
 
-      // Preserve any stage not in the include list that already has localStorage data
-      // (handles projects that have advanced — their old ticked tasks stay visible).
+      if (!matchedKey && project.pipelineStage) {
+        log(
+          `   ⚠  [${project.name}]  pipeline stage "${project.pipelineStage}" not in PIPELINE_STAGE_INCLUDE` +
+          ` — generating all assessment stages with dates as fallback.`,
+          'dl-warn',
+        );
+      }
+
+      // Preserve any assessment stage not in the include list that already
+      // has localStorage tick data (project advancement safety net).
       for (const stage of Object.keys(STAGE_COLUMNS)) {
         if (stagesToGen.has(stage)) continue;
         const lsPrefix = `${project.name}__${stage}__`;
@@ -2065,19 +2083,23 @@
 
       log(
         `   [${project.name}]  pipeline stage "${project.pipelineStage || '(none)'}"` +
-        `  →  generating: ${[...stagesToGen].join(', ')}`,
+        `  →  generating stages: ${[...stagesToGen].join(', ')}`,
         'dl-dim',
       );
 
-      // Iterate in canonical stage order so checklist grouping is stable.
-      for (const stage of Object.keys(STAGE_COLUMNS)) {
+      // Canonical order: Concept first, then assessment stages.
+      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS)];
+      for (const stage of ORDERED_STAGES) {
         if (!stagesToGen.has(stage)) continue;
 
-        const sd         = project.stageDates[stage];
         const stageTasks = taskDefs.filter(t => t.stage === stage);
+        if (!stageTasks.length) {
+          log(`      ↳ no task defs found for stage "${stage}" — check task_definitions.xlsx`, 'dl-warn');
+          continue;
+        }
 
-        if (!sd || !sd.actual) {
-          // No date for this stage → placeholder tasks (checklist only, not open tasks)
+        // 'Concept' has no assessment date — always generate as dateless checklist tasks.
+        if (stage === 'Concept') {
           for (const td of stageTasks) {
             allTasks.push({
               projectName:     project.name,
@@ -2091,19 +2113,26 @@
               isConcept:       true,
             });
           }
+          log(`      ↳ Concept: ${stageTasks.length} dateless task(s) generated`, 'dl-dim');
           continue;
         }
 
-        // Stage has a date → normal date-based generation
+        // Assessment stages: only generate when a date exists in pipeline_data.xlsx.
+        const sd = project.stageDates[stage];
+        if (!sd || !sd.actual) {
+          log(`      ↳ ${stage}: no date in pipeline data — tasks skipped`, 'dl-dim');
+          continue;
+        }
+
+        let generated = 0;
         for (const td of stageTasks) {
           const computedDueDate = addDays(sd.actual, -td.days_before);
           const startDate = td.duration_days != null
             ? addDays(computedDueDate, -td.duration_days)
             : null;
 
-          // Skip stale tasks (due more than 3 months ago)
           if (computedDueDate < threeMonthsAgo) {
-            log(`      ↳ stale task skipped: "${td.id}" for "${project.name}"/${stage} — due ${fmtDate(computedDueDate)}`, 'dl-dim');
+            log(`      ↳ stale task skipped: "${td.id}" due ${fmtDate(computedDueDate)}`, 'dl-dim');
             continue;
           }
 
@@ -2118,7 +2147,9 @@
             tickKey:         tickKey(project.name, stage, td.id),
             isConcept:       false,
           });
+          generated++;
         }
+        log(`      ↳ ${stage}: ${generated} task(s) generated (stage date ${fmtDate(sd.actual)})`, 'dl-dim');
       }
     }
 
@@ -2367,7 +2398,8 @@
   // Render the grouped task list for one project.
   function renderChecklistTasks(projectName) {
     const container  = document.getElementById('checklistTasks');
-    const stageOrder = Object.keys(STAGE_COLUMNS);
+    // 'Concept' first (dateless tasks), then assessment stages in pipeline order.
+    const stageOrder = ['Concept', ...Object.keys(STAGE_COLUMNS)];
     let html = '<div class="cl-tasks-wrap">';
     let hasAny = false;
 
