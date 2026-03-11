@@ -1820,7 +1820,7 @@
     log(`${taskDefs.length} project task def(s):`, 'dl-ok');
     for (const td of taskDefs) {
       const durStr = td.duration_days != null ? `  duration=${td.duration_days}d` : '';
-      log(`   [${td.stage}]  ${td.id}:  "${td.label}"  |  ${td.days_offset}d ${td.offset_direction}${durStr}`, 'dl-dim');
+      log(`   [${td.stage}]  ${td.id}:  "${td.label}"  |  ${td.days_offset}d ${td.offset_direction}${durStr}  time=${td.time}hrs`, 'dl-dim');
     }
     log(`${routineDefs.length} routine task def(s):`, routineDefs.length ? 'dl-ok' : 'dl-dim');
     for (const rt of routineDefs) {
@@ -1878,29 +1878,41 @@
       }
     }
 
-    // ── 9. Upcoming effort (next 14 days) ─────────────────────────────────────
-    logSection('9. ⏱ UPCOMING EFFORT (NEXT 14 DAYS)');
+    // ── 9. Effort chart values (per chart week) ────────────────────────────────
+    logSection('9. ⏱ EFFORT CHART VALUES');
     {
-      const today14 = new Date(); today14.setHours(0, 0, 0, 0);
-      const in14    = addDays(today14, 14);
-      const effortTasks = appState.allTasks.filter(t => {
+      const effortWeeks  = getTimelineWeeks();
+      const effortValues = computeWeeklyEffort(effortWeeks);
+      log('Weekly effort totals (hrs) across the 12-week chart window:', 'dl-ok');
+      for (let i = 0; i < effortWeeks.length; i++) {
+        const w   = effortWeeks[i];
+        const val = effortValues[i];
+        const cur = w.isCurrentWeek ? ' ← current' : '';
+        log(`   ${w.key}  ${val.toFixed(2)} hrs${cur}`, val > 0 ? 'dl-ok' : 'dl-dim');
+      }
+      // Per-task breakdown for all non-concept tasks with a due date in the window
+      const windowStart = effortWeeks[0].weekStart;
+      const windowEnd   = effortWeeks[effortWeeks.length - 1].weekEnd;
+      log('', '');
+      log('Per-task breakdown (tasks due within chart window):', 'dl-ok');
+      const windowTasks = appState.allTasks.filter(t => {
         if (t.isConcept) return false;
         const due = getEffectiveDueDate(t);
-        return due && due >= today14 && due <= in14;
+        return due && due >= windowStart && due <= windowEnd;
       }).sort((a, b) => getEffectiveDueDate(a) - getEffectiveDueDate(b));
-      if (!effortTasks.length) {
-        log('No tasks due in the next 14 days.', 'dl-dim');
+      if (!windowTasks.length) {
+        log('   (no tasks in chart window)', 'dl-dim');
       } else {
-        let totalHrs = 0;
-        for (const t of effortTasks) {
-          const dd     = t.taskDef.duration_days;
-          const hrs    = dd != null ? dd * 8 : '—';
-          const hrsStr = hrs !== '—' ? `${hrs} hrs (${dd}d × 8)` : '— (no duration_days)';
-          const proj   = t.projectName || 'Routine';
-          log(`   ${fmtDate(getEffectiveDueDate(t))}  [${proj}]  ${t.taskDef.label}  →  ${hrsStr}`, 'dl-dim');
-          if (hrs !== '—') totalHrs += hrs;
+        for (const t of windowTasks) {
+          const timeVal  = t.taskDef ? t.taskDef.time : 0.25;
+          const effStart = getEffectiveStartDate(t);
+          const effDue   = getEffectiveDueDate(t);
+          const spreadStr = (effStart && effStart < effDue)
+            ? `spread ${Math.round((effDue - effStart) / 86400000) + 1}d`
+            : 'due-week only';
+          const proj = t.projectName || 'Routine';
+          log(`   ${fmtDate(effDue)}  [${proj}]  ${t.taskDef.label}  →  time=${timeVal}hrs  (${spreadStr})`, 'dl-dim');
         }
-        log(`   Total estimated: ${totalHrs} hrs across ${effortTasks.length} task(s)`, 'dl-ok');
       }
     }
 
