@@ -986,7 +986,7 @@
         <select id="projectSelect" class="cl-project-select">
           <option value="">— Select a project —</option>
         </select>
-        <span id="projectRoleBadge"></span>
+        <span id="projectRoleBadge" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
       </div>
       <div id="checklistTasks"></div>
     </div>
@@ -1094,7 +1094,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v7.1';
+  const VERSION = 'v7.2';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -2680,13 +2680,27 @@
     const badge = document.getElementById('projectRoleBadge');
     if (!badge) return;
     if (!projectName) { badge.innerHTML = ''; return; }
-    const project = appState.projects.find(p => p.name === projectName);
-    if (!project) { badge.innerHTML = ''; return; }
-    const rc = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
-    badge.innerHTML = `<span class="cl-role-badge"
-      style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-      My role: ${esc(project.role)}
-    </span>`;
+
+    // Find raw pipeline row (contains all 5 people columns, not just MK).
+    const raw = appState.pipelineRows.find(r =>
+      (r['Project: Project Name'] || '').trim() === projectName
+    );
+    if (!raw) { badge.innerHTML = ''; return; }
+    const rn = nwwNormRow(raw);  // normalised (trimmed) keys
+
+    let html = '';
+    for (const col of NWW_PEOPLE_COLS) {
+      const name = (rn[col] || '').trim();
+      if (!name) continue;
+      const roleLabel = NWW_ROLE_FOR_COL[col] || col;
+      // Pick colour from NWW_ROLE_COLORS (covers all 5 cols including the two extras).
+      const rc = NWW_ROLE_COLORS[roleLabel] || NWW_ROLE_COLORS['Analyst'];
+      html += `<span class="cl-role-badge"
+        style="background:${rc.bg};color:${rc.text};border-color:${rc.border};margin-right:4px">
+        ${esc(roleLabel)}: ${esc(name)}
+      </span>`;
+    }
+    badge.innerHTML = html;
   }
 
   // Rebuild the dropdown and (re-)render tasks for the currently selected project.
@@ -3171,20 +3185,12 @@
           return due && due <= in7Days;   // include overdue (no lower bound)
         });
 
-      const stageEvents = [];
-      for (const [stage, sd] of Object.entries(proj.stageDates)) {
-        if (!sd || !sd.actual) continue;
-        const eff = getEffectiveStageActual(proj.name, stage, sd.actual);
-        if (eff <= in7Days) stageEvents.push({ stage, date: eff });  // include overdue events
-      }
-
-      const combinedRows = [
-        ...tasks.map(t => ({ kind: 'task',  t, date: getEffectiveDueDate(t) })),
-        ...stageEvents.map(e => ({ kind: 'event', e, date: e.date })),
-      ].sort((a, b) => a.date - b.date);
+      const combinedRows = tasks
+        .map(t => ({ kind: 'task', t, date: getEffectiveDueDate(t) }))
+        .sort((a, b) => a.date - b.date);
 
       const earliestDate = combinedRows.length ? combinedRows[0].date : null;
-      return { proj, tasks, stageEvents, combinedRows, earliestDate };
+      return { proj, combinedRows, earliestDate };
     });
 
     // Projects with content in window first (sorted by earliest date), rest at bottom.
@@ -3215,38 +3221,26 @@
         </tr></thead><tbody>`;
 
         for (const row of combinedRows) {
-          if (row.kind === 'task') {
-            const t        = row.t;
-            const sc       = t.stage ? (STAGE_COLORS[t.stage] || null) : null;
-            const effStart = getEffectiveStartDate(t);
-            const effDue   = getEffectiveDueDate(t);
-            const urgency  = dateUrgency(effDue);
-            const rowCls   = urgency ? ` cl-${urgency}` : '';
-            html += `<tr class="nww-row${rowCls}">
-              <td class="nww-td nww-td-tick">
-                <input type="checkbox" class="nww-checkbox"
-                  data-tick-key="${esc(t.tickKey)}"
-                  data-project="${esc(t.projectName)}"
-                  data-person="${esc(personName)}">
-              </td>
-              <td class="nww-td">${esc(t.taskDef.label)}</td>
-              <td class="nww-td">${sc
-                ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
-                : '—'}</td>
-              <td class="nww-td nww-td-date">${effStart ? fmtDate(effStart) : '—'}</td>
-              <td class="nww-td nww-td-date">${effDue ? fmtDate(effDue) : '—'}</td>
-            </tr>`;
-          } else {
-            const e  = row.e;
-            const sc = STAGE_COLORS[e.stage] || STAGE_COLORS['EOI Panel'];
-            html += `<tr class="nww-row nww-row-event">
-              <td class="nww-td nww-td-tick"></td>
-              <td class="nww-td"><span class="nww-event-marker">◆</span>${esc(e.stage)} assessment</td>
-              <td class="nww-td"><span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(e.stage)}</span></td>
-              <td class="nww-td nww-td-date">—</td>
-              <td class="nww-td nww-td-date">${fmtDate(e.date)}</td>
-            </tr>`;
-          }
+          const t        = row.t;
+          const sc       = t.stage ? (STAGE_COLORS[t.stage] || null) : null;
+          const effStart = getEffectiveStartDate(t);
+          const effDue   = getEffectiveDueDate(t);
+          const urgency  = dateUrgency(effDue);
+          const rowCls   = urgency ? ` cl-${urgency}` : '';
+          html += `<tr class="nww-row${rowCls}">
+            <td class="nww-td nww-td-tick">
+              <input type="checkbox" class="nww-checkbox"
+                data-tick-key="${esc(t.tickKey)}"
+                data-project="${esc(t.projectName)}"
+                data-person="${esc(personName)}">
+            </td>
+            <td class="nww-td">${esc(t.taskDef.label)}</td>
+            <td class="nww-td">${sc
+              ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
+              : '—'}</td>
+            <td class="nww-td nww-td-date">${effStart ? fmtDate(effStart) : '—'}</td>
+            <td class="nww-td nww-td-date">${effDue ? fmtDate(effDue) : '—'}</td>
+          </tr>`;
         }
         html += `</tbody></table>`;
       }
