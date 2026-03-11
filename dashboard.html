@@ -201,7 +201,8 @@
       z-index: 1;
       vertical-align: middle;
     }
-    .tl-label-inner { display: flex; flex-direction: row; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .tl-label-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .tl-chips-row   { display: flex; flex-direction: row; align-items: center; gap: 5px; flex-wrap: wrap; }
     .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; word-break: break-word; white-space: normal; }
     .tl-info-chip {
       display: inline-block;
@@ -590,8 +591,11 @@
       border-bottom: 1px solid #21262d;
       white-space: nowrap;
     }
-    .nww-th-date { width: 84px; }
+    .nww-th-tick  { width: 28px; }
+    .nww-th-date  { width: 84px; }
     .nww-th-stage { width: 110px; }
+    .nww-td-tick  { text-align: center; vertical-align: middle; }
+    .nww-td-tick input[type="checkbox"] { width: 15px; height: 15px; accent-color: #3fb950; cursor: pointer; }
     .nww-td {
       padding: 4px 8px 4px 4px;
       color: #c9d1d9;
@@ -919,7 +923,7 @@
       font-style: italic;
     }
 
-    /* Updated checklist task row — 7 columns: cb label stage start due role del */
+    /* Checklist task row — 6 columns: cb | label | role | start | due | del */
     .cl-task-row {
       display: grid;
       grid-template-columns: 28px 1fr auto auto auto auto;
@@ -1090,7 +1094,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v7.0';
+  const VERSION = 'v7.1';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1803,16 +1807,18 @@
         <td class="tl-label"${teamBg ? ` style="background:${teamBg}"` : ''}>
           <div class="tl-label-inner">
             <span class="tl-project-name">${esc(project.name)}</span>
-            <span class="tl-role-badge"
-              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-              ${esc(project.role)}
-            </span>
-            ${project.pipelineStage
-              ? `<span class="tl-info-chip tl-info-chip-stage">Stage: ${esc(project.pipelineStage)}</span>`
-              : ''}
-            ${nextAssessStage
-              ? `<span class="tl-info-chip tl-info-chip-next">Next: ${esc(nextAssessStage)}</span>`
-              : ''}
+            <div class="tl-chips-row">
+              <span class="tl-role-badge"
+                style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+                ${esc(project.role)}
+              </span>
+              ${project.pipelineStage
+                ? `<span class="tl-info-chip tl-info-chip-stage">Stage: ${esc(project.pipelineStage)}</span>`
+                : ''}
+              ${nextAssessStage
+                ? `<span class="tl-info-chip tl-info-chip-next">Next: ${esc(nextAssessStage)}</span>`
+                : ''}
+            </div>
           </div>
         </td>`;
 
@@ -2781,9 +2787,9 @@
               ${esc(t.taskDef.label)}
               ${t.isCustom ? '<span class="custom-badge" style="margin-left:5px">custom</span>' : ''}
             </span>
-            <span class="cl-stage-chip-sm"
-              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
-              ${esc(stage)}
+            <span class="cl-role-badge"
+              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(taskRole)}
             </span>
             <span class="cl-start-date" title="Start date">${esc(startDisplay)}</span>
             <span style="display:flex;align-items:center;gap:3px;flex-shrink:0">
@@ -2794,10 +2800,6 @@
                 title="Edit due/start date">✎</button>
             </span>
             <span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-              <span class="cl-role-badge"
-                style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
-                ${esc(taskRole)}
-              </span>
               ${t.isCustom ? `<button class="btn-delete-task cl-delete-custom" data-tick-key="${esc(t.tickKey)}" data-project="${esc(projectName)}" title="Delete custom task">✕</button>` : ''}
             </span>
           </div>`;
@@ -2946,17 +2948,17 @@
       return;
     }
 
-    // 8 columns: Project | Stage | Task | Role | Start | Due+pencil | ✓ | del
+    // 8 columns: ✓ | Project | Stage | Task | Role | Start | Due+pencil | del
     let html = `
       <table class="ot-table">
         <thead><tr>
+          <th class="ot-th" style="width:36px;text-align:center">✓</th>
           <th class="ot-th" style="width:15%">Project</th>
           <th class="ot-th" style="width:12%">Stage</th>
           <th class="ot-th">Task</th>
           <th class="ot-th" style="width:11%">Role</th>
           <th class="ot-th" style="width:78px;text-align:right">Start</th>
           <th class="ot-th" style="width:90px;text-align:right">Due</th>
-          <th class="ot-th" style="width:36px;text-align:center">✓</th>
           <th class="ot-th" style="width:28px"></th>
         </tr></thead>
         <tbody>`;
@@ -2971,6 +2973,9 @@
         const rc      = ROLE_COLORS[t.taskDef.role] || ROLE_COLORS['Analyst'];
         html += `
           <tr class="ot-row ot-row-routine${rowCls}">
+            <td class="ot-td ot-td-tick">
+              <input type="checkbox" class="ot-checkbox" data-tick-key="${esc(t.tickKey)}" data-project="">
+            </td>
             <td class="ot-td ot-td-routine-team" title="${esc(t.impactTeam || 'Routine')}">${esc(t.impactTeam || 'Routine')}</td>
             <td class="ot-td" style="color:#6e7681;font-size:0.75rem">—</td>
             <td class="ot-td">${esc(t.taskDef.label)}</td>
@@ -2981,9 +2986,6 @@
             </td>
             <td class="ot-td ot-td-start">—</td>
             <td class="ot-td ot-td-due">${fmtDate(t.dueDate)}</td>
-            <td class="ot-td ot-td-tick">
-              <input type="checkbox" class="ot-checkbox" data-tick-key="${esc(t.tickKey)}" data-project="">
-            </td>
             <td class="ot-td"></td>
           </tr>`;
         if (isEditing) {
@@ -3004,6 +3006,11 @@
 
       html += `
         <tr class="ot-row${rowCls}">
+          <td class="ot-td ot-td-tick">
+            <input type="checkbox" class="ot-checkbox"
+              data-tick-key="${esc(t.tickKey)}"
+              data-project="${esc(t.projectName)}">
+          </td>
           <td class="ot-td ot-td-project" title="${esc(t.projectName)}">${t.projectName ? esc(truncate(t.projectName, 22)) : '—'}</td>
           <td class="ot-td">${sc
             ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
@@ -3024,11 +3031,6 @@
               data-tick-key="${esc(t.tickKey)}"
               data-panel="opentasks"
               title="Edit due/start date">✎</button>
-          </td>
-          <td class="ot-td ot-td-tick">
-            <input type="checkbox" class="ot-checkbox"
-              data-tick-key="${esc(t.tickKey)}"
-              data-project="${esc(t.projectName)}">
           </td>
           <td class="ot-td" style="padding:4px 2px">
             ${t.isCustom
@@ -3156,6 +3158,7 @@
     }
 
     // Compute per-project earliest due date in window, then sort: soonest first, no-tasks last.
+    // Window: overdue (any past date) up to today+7.
     const projData = baseMatches.map(proj => {
       const tasks = appState.allTasks
         .filter(t =>
@@ -3165,14 +3168,14 @@
         )
         .filter(t => {
           const due = getEffectiveDueDate(t);
-          return due && due >= today && due <= in7Days;
+          return due && due <= in7Days;   // include overdue (no lower bound)
         });
 
       const stageEvents = [];
       for (const [stage, sd] of Object.entries(proj.stageDates)) {
         if (!sd || !sd.actual) continue;
         const eff = getEffectiveStageActual(proj.name, stage, sd.actual);
-        if (eff >= today && eff <= in7Days) stageEvents.push({ stage, date: eff });
+        if (eff <= in7Days) stageEvents.push({ stage, date: eff });  // include overdue events
       }
 
       const combinedRows = [
@@ -3204,6 +3207,7 @@
         html += `<div class="nww-no-tasks">No tasks due this week</div>`;
       } else {
         html += `<table class="nww-table"><thead><tr>
+          <th class="nww-th nww-th-tick"></th>
           <th class="nww-th">Task</th>
           <th class="nww-th nww-th-stage">Stage</th>
           <th class="nww-th nww-th-date">Start</th>
@@ -3216,7 +3220,15 @@
             const sc       = t.stage ? (STAGE_COLORS[t.stage] || null) : null;
             const effStart = getEffectiveStartDate(t);
             const effDue   = getEffectiveDueDate(t);
-            html += `<tr class="nww-row">
+            const urgency  = dateUrgency(effDue);
+            const rowCls   = urgency ? ` cl-${urgency}` : '';
+            html += `<tr class="nww-row${rowCls}">
+              <td class="nww-td nww-td-tick">
+                <input type="checkbox" class="nww-checkbox"
+                  data-tick-key="${esc(t.tickKey)}"
+                  data-project="${esc(t.projectName)}"
+                  data-person="${esc(personName)}">
+              </td>
               <td class="nww-td">${esc(t.taskDef.label)}</td>
               <td class="nww-td">${sc
                 ? `<span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(t.stage)}</span>`
@@ -3228,6 +3240,7 @@
             const e  = row.e;
             const sc = STAGE_COLORS[e.stage] || STAGE_COLORS['EOI Panel'];
             html += `<tr class="nww-row nww-row-event">
+              <td class="nww-td nww-td-tick"></td>
               <td class="nww-td"><span class="nww-event-marker">◆</span>${esc(e.stage)} assessment</td>
               <td class="nww-td"><span class="cl-stage-chip-sm" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(e.stage)}</span></td>
               <td class="nww-td nww-td-date">—</td>
@@ -3307,6 +3320,23 @@
     } else {
       document.getElementById('nwwList').innerHTML =
         '<div class="cl-empty">Select a person above to see their tasks for the next 7 days.</div>';
+    }
+  });
+
+  // NWW tick checkboxes — use event delegation since rows are re-built on each render.
+  document.getElementById('nwwList').addEventListener('change', e => {
+    if (!e.target.classList.contains('nww-checkbox')) return;
+    const key        = e.target.dataset.tickKey;
+    const project    = e.target.dataset.project;
+    const personName = e.target.dataset.person;
+    setTick(key, true);
+    renderNwwForPerson(personName);
+    renderOpenTasks();
+    renderTimeline();
+    renderSummaryCards();
+    if (project) {
+      const sel = document.getElementById('projectSelect').value;
+      if (sel === project) renderChecklistTasks(project);
     }
   });
 
