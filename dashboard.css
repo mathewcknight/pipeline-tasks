@@ -1,0 +1,928 @@
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 24px;
+      min-height: 100vh;
+      min-width: 1100px;
+    }
+    /* Page header — title on left, summary cards on right */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .page-header-left { flex: 1; }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; color: #e6edf3; }
+    .subtitle { font-size: 0.82rem; color: #8b949e; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 8px 18px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: opacity .15s;
+      background: #21262d;
+      color: #e6edf3;
+    }
+    .btn:hover { opacity: .8; }
+    .btn-primary  { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    .btn-secondary { display: none; }
+    #status { font-size: 0.82rem; color: #8b949e; padding: 4px 0; }
+
+    /* ── Alerts ── */
+    .alert { padding: 8px 14px; border-radius: 6px; font-size: 0.82rem; margin-bottom: 12px; }
+    .alert-warn { background: #2d2002; border: 1px solid #9e6a03; color: #e3b341; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8b949e;
+      margin-bottom: 10px;
+    }
+
+    /* ══ Summary cards ═════════════════════════════════════════════════════════ */
+    #summaryCards {
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+      align-self: flex-start;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 18px;
+      min-width: 96px;
+      text-align: center;
+    }
+    .stat-card-number {
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+      color: #8b949e;
+    }
+    .stat-card-label {
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #6e7681;
+    }
+    .stat-card.stat-overdue { border-color: rgba(248,81,73,0.5); }
+    .stat-card.stat-overdue .stat-card-number { color: #f85149; }
+    .stat-card.stat-overdue.has-items { border-color: #f85149; background: rgba(248,81,73,0.06); }
+    .stat-card.stat-today { border-color: rgba(210,153,34,0.4); }
+    .stat-card.stat-today .stat-card-number { color: #e3b341; }
+    .stat-card.stat-today.has-items { border-color: #d29922; background: rgba(210,153,34,0.06); }
+    .stat-card.stat-week { border-color: rgba(56,139,253,0.4); }
+    .stat-card.stat-week .stat-card-number { color: #58a6ff; }
+    .stat-card.stat-week.has-items { border-color: #388bfd; background: rgba(31,111,235,0.06); }
+
+    /* ══ Timeline ══════════════════════════════════════════════════════════════ */
+    #timeline { margin-bottom: 24px; }
+
+    .tl-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+    .tl-table {
+      width: 100%;
+      min-width: 1050px;
+      border-collapse: collapse;
+      background: #161b22;
+      table-layout: fixed;
+    }
+
+    /* Header */
+    .tl-th-label {
+      width: 375px;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .tl-th-month {
+      padding: 8px 5px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #21262d;
+    }
+    .tl-th-month:last-child { border-right: none; }
+    .tl-th-month.tl-cur { color: #58a6ff; background: #0d1f36; border-bottom: 2px solid #1f6feb; }
+
+    /* Rows */
+    .tl-row { border-bottom: 1px solid #21262d; }
+    .tl-row:last-child { border-bottom: none; }
+    .tl-row:hover .tl-label,
+    .tl-row:hover .tl-cell         { background: #1c2128; }
+    .tl-row:hover .tl-cell.tl-cur-col { background: #102030; }
+
+    .tl-label {
+      padding: 6px 10px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      vertical-align: middle;
+    }
+    .tl-label-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .tl-chips-row   { display: flex; flex-direction: row; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .tl-project-name { font-size: 0.8rem; font-weight: 500; color: #e6edf3; line-height: 1.3; word-break: break-word; white-space: normal; }
+    .tl-info-chip {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.60rem;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .tl-info-chip-stage    { background: #1c2128; color: #8b949e; border: 1px solid #30363d; }
+    .tl-info-chip-next     { background: #102030; color: #79c0ff; border: 1px solid #1f6feb; }
+    .tl-role-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 20px;
+      font-size: 0.63rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .tl-cell {
+      padding: 6px 7px;
+      background: #161b22;
+      vertical-align: top;
+      border-right: 1px solid #21262d;
+    }
+    .tl-cell:last-child { border-right: none; }
+    .tl-cell.tl-cur-col { background: #0c1c2e; }
+
+    /* Stage assessment markers */
+    .tl-stage-marker {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      margin-bottom: 3px;
+      border: 1px solid;
+      white-space: normal;
+      flex-wrap: wrap;
+      position: relative;
+    }
+    .tl-diamond { font-size: 0.6rem; flex-shrink: 0; }
+    .tl-stage-date {
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: auto;
+      padding-left: 6px;
+      font-size: 0.67rem;
+    }
+    /* Pencil edit button — hidden until marker hovered */
+    .tl-marker-pencil {
+      background: transparent; border: none; color: inherit;
+      opacity: 0; cursor: pointer; font-size: 0.75rem; padding: 0 2px;
+      transition: opacity .15s; flex-shrink: 0;
+    }
+    .tl-stage-marker:hover .tl-marker-pencil { opacity: 0.75; }
+    .tl-marker-pencil:hover { opacity: 1 !important; }
+    /* Inline date-edit row inside a marker */
+    .tl-marker-edit {
+      width: 100%; display: flex; align-items: center; gap: 4px;
+      flex-wrap: wrap; margin-top: 4px;
+    }
+    .tl-date-input {
+      background: rgba(0,0,0,0.45); color: inherit;
+      border: 1px solid currentColor; border-radius: 3px;
+      padding: 2px 4px; font-size: 0.7rem; width: 108px;
+    }
+    .tl-btn-save, .tl-btn-cancel {
+      background: transparent; border: 1px solid currentColor;
+      border-radius: 3px; color: inherit; cursor: pointer;
+      font-size: 0.68rem; padding: 1px 5px;
+    }
+    .tl-date-overridden { text-decoration: underline dotted; }
+
+    /* Task chips */
+    .tl-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+    .tl-task-chip {
+      display: block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.64rem;
+      border-left: 2px solid;
+      background: rgba(255,255,255,0.03);
+      color: #8b949e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tl-task-chip.tl-ticked { opacity: 0.35; text-decoration: line-through; }
+
+    /* ══ Debug Panel ═══════════════════════════════════════════════════════════ */
+    #debugPanel {
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 18px 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      max-height: 60vh;
+      overflow-y: auto;
+      border: 1px solid #30363d;
+    }
+    .dl { margin: 0; }
+    .dl-section {
+      color: #58a6ff;
+      font-weight: bold;
+      margin: 12px 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.75rem;
+      border-top: 1px solid #21262d;
+      padding-top: 8px;
+    }
+    .dl-section:first-child { border-top: none; margin-top: 0; }
+    .dl-ok   { color: #3fb950; }
+    .dl-warn { color: #d29922; }
+    .dl-err  { color: #f85149; }
+    .dl-dim  { color: #8b949e; }
+    .dl-json {
+      color: #ce9178;
+      margin: 2px 0 4px 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ══ Checklist Panel ════════════════════════════════════════════════════════ */
+    #checklist { margin-bottom: 24px; }
+
+    .cl-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .cl-project-select {
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      min-width: 280px;
+      max-width: 480px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .cl-project-select:focus { outline: none; border-color: #388bfd; }
+
+    .cl-tasks-wrap { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Stage group */
+    .cl-stage-group {
+      border: 1px solid #30363d;
+      border-radius: 7px;
+      overflow: hidden;
+      background: #161b22;
+    }
+    .cl-stage-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+    }
+    .cl-stage-all-cb {
+      width: 15px; height: 15px;
+      cursor: pointer;
+      accent-color: #388bfd;
+      flex-shrink: 0;
+    }
+    .cl-stage-chip {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: 1px solid;
+      letter-spacing: 0.02em;
+    }
+
+    /* Task rows — grid defined at bottom of stylesheet (7-column layout) */
+    .cl-task-row:last-child { border-bottom: none; }
+    .cl-task-row:hover { background: #1c2128; }
+
+    /* Urgency highlight — applied to the row bg */
+    .cl-task-row.cl-overdue  { background: rgba(248, 81, 73, 0.08); }
+    .cl-task-row.cl-due-soon { background: rgba(210, 153, 34, 0.08); }
+    .cl-task-row.cl-overdue:hover  { background: rgba(248, 81, 73, 0.14); }
+    .cl-task-row.cl-due-soon:hover { background: rgba(210, 153, 34, 0.14); }
+
+    /* Ticked row */
+    .cl-task-row.cl-ticked { opacity: 0.45; }
+
+    /* Custom checkbox */
+    .cl-checkbox-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .cl-checkbox-wrap input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #3fb950;
+      cursor: pointer;
+    }
+
+    /* Task label */
+    .cl-task-label {
+      font-size: 0.84rem;
+      color: #c9d1d9;
+      line-height: 1.3;
+    }
+    .cl-task-label.cl-ticked-text {
+      text-decoration: line-through;
+      color: #8b949e;
+    }
+
+    /* Stage chip (small, in row) */
+    .cl-stage-chip-sm {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.67rem;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Due date */
+    .cl-due-date {
+      font-size: 0.78rem;
+      color: #8b949e;
+      white-space: nowrap;
+      min-width: 80px;
+      text-align: right;
+    }
+    .cl-task-row.cl-overdue  .cl-due-date { color: #f85149; font-weight: 600; }
+    .cl-task-row.cl-due-soon .cl-due-date { color: #d29922; font-weight: 600; }
+
+    /* Role badge */
+    .cl-role-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.67rem;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Empty state */
+    .cl-empty {
+      padding: 20px;
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.84rem;
+    }
+
+    /* ══ Two-panel row ══════════════════════════════════════════════════════════ */
+    #panels {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    #checklist {
+      flex: 0 0 42%;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    #openTasks {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    /* Scrollable content areas */
+    #checklistTasks {
+      max-height: 62vh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #30363d #161b22;
+    }
+    #checklistTasks::-webkit-scrollbar { width: 6px; }
+    #checklistTasks::-webkit-scrollbar-track { background: #161b22; }
+    #checklistTasks::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .ot-scroll {
+      max-height: 62vh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #30363d #161b22;
+    }
+    .ot-scroll::-webkit-scrollbar { width: 6px; }
+    .ot-scroll::-webkit-scrollbar-track { background: #161b22; }
+    .ot-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+    /* Panel section headers with optional count badge */
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .panel-header .section-label { margin-bottom: 0; }
+    .count-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.70rem;
+      font-weight: 600;
+      background: #21262d;
+      color: #8b949e;
+      border: 1px solid #30363d;
+    }
+    .count-badge.has-items { background: #0c2d6b; color: #79c0ff; border-color: #388bfd; }
+
+    /* ══ Timeline effort chart row ═══════════════════════════════════════════════ */
+    .tl-chart-label {
+      font-size: 0.62rem;
+      color: #4e5a6a;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      vertical-align: bottom;
+      padding: 6px 12px 2px;
+      background: #0d1117;
+      border-right: 1px solid #21262d;
+      border-bottom: none;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .tl-chart-th {
+      padding: 0;
+      background: #0d1117;
+      border-bottom: none;
+      vertical-align: bottom;
+    }
+    /* Task-name labels inside timeline week cells — allow full text wrap (item 7) */
+    .tl-task-label {
+      font-size: 0.60rem;
+      color: #6e7681;
+      margin-top: 4px;
+      padding: 1px 3px;
+      border-left: 2px solid #30363d;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    /* ══ Next week with panel ════════════════════════════════════════════════════ */
+    #nextWeekWith {
+      width: 42%;
+      min-width: 0;
+      margin-bottom: 24px;
+    }
+    .nww-controls {
+      margin-bottom: 10px;
+    }
+    .nww-select {
+      width: 100%;
+      max-width: 320px;
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 0.84rem;
+    }
+    .nww-select:focus { outline: none; border-color: #388bfd; }
+    .nww-project-block {
+      margin-bottom: 16px;
+    }
+    .nww-project-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0 6px 0;
+      border-bottom: 1px solid #21262d;
+      margin-bottom: 6px;
+    }
+    .nww-project-name {
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: #c9d1d9;
+    }
+    .nww-no-tasks {
+      padding: 6px 4px;
+      color: #6e7681;
+      font-size: 0.80rem;
+      font-style: italic;
+    }
+    .nww-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .nww-th {
+      text-align: left;
+      padding: 4px 8px 4px 4px;
+      color: #8b949e;
+      font-weight: 600;
+      border-bottom: 1px solid #21262d;
+      white-space: nowrap;
+    }
+    .nww-th-tick  { width: 28px; }
+    .nww-th-date  { width: 84px; }
+    .nww-th-stage { width: 110px; }
+    .nww-td-tick  { text-align: center; vertical-align: middle; }
+    .nww-td-tick input[type="checkbox"] { width: 15px; height: 15px; accent-color: #3fb950; cursor: pointer; }
+    .nww-td {
+      padding: 4px 8px 4px 4px;
+      color: #c9d1d9;
+      border-bottom: 1px solid #161b22;
+      vertical-align: middle;
+    }
+    .nww-td-date {
+      color: #8b949e;
+      white-space: nowrap;
+      font-size: 0.78rem;
+    }
+    /* NWW due date urgency colour coding (item 5) */
+    .nww-row.cl-overdue  .nww-td-due { color: #f85149; font-weight: 600; }
+    .nww-row.cl-due-soon .nww-td-due { color: #d29922; font-weight: 600; }
+    .nww-row:hover td { background: #1c2128; }
+    .nww-row-event td { color: #8b949e; font-style: italic; }
+    .nww-event-marker { color: #d29922; margin-right: 4px; }
+
+    /* ══ Debug panel toggle ══════════════════════════════════════════════════════ */
+    .debug-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      margin-top: 8px;
+      margin-bottom: 0;
+    }
+    .debug-toggle:hover .section-label { color: #c9d1d9; }
+    .debug-chevron {
+      font-size: 0.65rem;
+      color: #8b949e;
+      transition: transform .2s;
+      display: inline-block;
+    }
+    .debug-chevron.open { transform: rotate(90deg); }
+    #debugPanel {
+      margin-top: 8px;
+      transition: none;
+    }
+
+    /* ══ Open Tasks Panel ═══════════════════════════════════════════════════════ */
+    .ot-scroll {
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #161b22;
+    }
+    .ot-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .ot-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .ot-th {
+      padding: 8px 10px;
+      background: #0d1117;
+      font-size: 0.70rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      border-bottom: 1px solid #30363d;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .ot-th:last-child { width: 36px; text-align: center; }
+
+    .ot-row {
+      border-bottom: 1px solid #21262d;
+      transition: background .1s;
+    }
+    .ot-row:last-child { border-bottom: none; }
+    .ot-row:hover { background: #1c2128; }
+    .ot-row.cl-overdue  { background: rgba(248, 81, 73, 0.08); }
+    .ot-row.cl-due-soon { background: rgba(210, 153, 34, 0.08); }
+    .ot-row.cl-overdue:hover  { background: rgba(248, 81, 73, 0.14); }
+    .ot-row.cl-due-soon:hover { background: rgba(210, 153, 34, 0.14); }
+
+    .ot-td {
+      padding: 8px 10px;
+      font-size: 0.81rem;
+      color: #c9d1d9;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ot-td-project { font-size: 0.78rem; color: #8b949e; }
+    .ot-td-due {
+      font-size: 0.78rem;
+      color: #8b949e;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .ot-row.cl-overdue  .ot-td-due { color: #f85149; font-weight: 600; }
+    .ot-row.cl-due-soon .ot-td-due { color: #d29922; font-weight: 600; }
+    .ot-td-tick { text-align: center; }
+    .ot-td-tick input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #3fb950;
+      cursor: pointer;
+    }
+    .ot-all-done {
+      padding: 28px;
+      text-align: center;
+      color: #3fb950;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    /* ══ Modals (shared) ════════════════════════════════════════════════════════ */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 26px 28px;
+      width: 460px;
+      max-width: 95vw;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    }
+    .modal-title {
+      font-size: 0.96rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 20px;
+    }
+    .modal-field { margin-bottom: 14px; }
+    .modal-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+    .modal-input, .modal-select {
+      width: 100%;
+      background: #0d1117;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.88rem;
+      font-family: inherit;
+    }
+    .modal-input:focus, .modal-select:focus { outline: none; border-color: #388bfd; }
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 22px;
+    }
+    .modal-body-text { font-size: 0.88rem; color: #c9d1d9; line-height: 1.6; margin-bottom: 6px; }
+    .btn-icon {
+      padding: 2px 9px;
+      background: transparent;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #58a6ff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1.4;
+    }
+    .btn-icon:hover { background: #21262d; }
+    .btn-danger { background: #3d0d0d; border-color: #f85149; color: #ffa0a0; }
+    .btn-danger:hover { opacity: 0.85; }
+    /* Custom-task badge (small "custom" indicator on task rows) */
+    .custom-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      background: #1c2d40;
+      color: #58a6ff;
+      border: 1px solid #1f6feb;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    /* Delete button for custom tasks */
+    .btn-delete-task {
+      background: transparent;
+      border: none;
+      color: #6e7681;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .btn-delete-task:hover { color: #f85149; background: rgba(248,81,73,0.1); }
+
+    /* ══ Start-date filter toggle ════════════════════════════════════════════ */
+    .btn-filter {
+      padding: 3px 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      color: #8b949e;
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s;
+    }
+    .btn-filter:hover { opacity: .8; }
+    .btn-filter.filter-active { background: #0c2d6b; border-color: #388bfd; color: #79c0ff; }
+
+    /* ══ Start date cell ═════════════════════════════════════════════════════ */
+    .cl-start-date {
+      font-size: 0.75rem;
+      color: #6e7681;
+      white-space: nowrap;
+      min-width: 72px;
+      text-align: right;
+    }
+    .ot-td-start {
+      font-size: 0.75rem;
+      color: #6e7681;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* ══ Due date override indicator ════════════════════════════════════════ */
+    .cl-due-date.cl-overridden { color: #79c0ff; }
+    .ot-td-due.cl-overridden   { color: #79c0ff; }
+
+    /* ══ Pencil edit button ══════════════════════════════════════════════════ */
+    .btn-pencil {
+      background: transparent;
+      border: none;
+      color: #6e7681;
+      cursor: pointer;
+      font-size: 0.78rem;
+      padding: 1px 3px;
+      border-radius: 3px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .btn-pencil:hover { color: #58a6ff; background: rgba(56,139,253,0.12); }
+
+    /* ══ Inline date-override edit row ══════════════════════════════════════ */
+    .cl-edit-row {
+      padding: 10px 14px 12px 40px;
+      background: #0a0f15;
+      border-bottom: 1px solid #21262d;
+      border-top: 1px solid #1a2332;
+    }
+    .cl-edit-section { margin-bottom: 8px; }
+    .cl-edit-section:last-of-type { margin-bottom: 0; }
+    .cl-edit-meta {
+      font-size: 0.72rem;
+      color: #6e7681;
+      margin-bottom: 5px;
+      font-style: italic;
+    }
+    .cl-edit-fields {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .cl-edit-label {
+      font-size: 0.72rem;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+    .cl-date-input {
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #388bfd;
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 0.81rem;
+      font-family: inherit;
+    }
+    .cl-date-input:focus { outline: none; border-color: #58a6ff; }
+    .btn-save-override {
+      padding: 3px 11px;
+      background: #1f6feb;
+      border: 1px solid #388bfd;
+      border-radius: 5px;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-save-override:hover { opacity: .85; }
+    .btn-reset-override {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 0.73rem;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .btn-reset-override:hover { color: #f85149; }
+    .cl-edit-cancel-row { margin-top: 6px; }
+    /* edit row inside open tasks table */
+    .ot-edit-tr td {
+      padding: 10px 14px 12px;
+      background: #0a0f15;
+      border-bottom: 1px solid #21262d;
+    }
+
+    /* ══ Routine task rows ════════════════════════════════════════════════════ */
+    .ot-row-routine { border-left: 2px solid #30363d; }
+    .ot-td-routine-team {
+      font-size: 0.72rem;
+      color: #6e7681;
+      font-style: italic;
+    }
+
+    /* Checklist task row — 6 columns: cb | label | role | start | due | del */
+    .cl-task-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #21262d;
+      transition: background .1s;
+    }
