@@ -536,6 +536,40 @@
     }
     .count-badge.has-items { background: #0c2d6b; color: #79c0ff; border-color: #388bfd; }
 
+    /* ══ Timeline effort chart row ═══════════════════════════════════════════════ */
+    .tl-chart-label {
+      font-size: 0.62rem;
+      color: #4e5a6a;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      vertical-align: bottom;
+      padding: 6px 12px 2px;
+      background: #0d1117;
+      border-right: 1px solid #21262d;
+      border-bottom: none;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .tl-chart-th {
+      padding: 0;
+      background: #0d1117;
+      border-bottom: none;
+      vertical-align: bottom;
+    }
+    /* Task-name labels inside timeline week cells */
+    .tl-task-label {
+      font-size: 0.60rem;
+      color: #6e7681;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+      padding: 1px 3px;
+      border-left: 2px solid #30363d;
+      line-height: 1.4;
+    }
+
     /* ══ Next week with panel ════════════════════════════════════════════════════ */
     #nextWeekWith {
       width: 42%;
@@ -1057,6 +1091,10 @@
         <input id="ctDueDate" type="date" class="modal-input">
       </div>
       <div class="modal-field">
+        <label class="modal-label" for="ctTime">Time estimate (hrs) <span style="color:#6e7681;font-weight:400">optional — default 0.25</span></label>
+        <input id="ctTime" type="number" class="modal-input" min="0.05" step="0.25" placeholder="0.25" style="max-width:120px">
+      </div>
+      <div class="modal-field">
         <label class="modal-label" for="ctRole">Usual Task Owner</label>
         <select id="ctRole" class="modal-select">
           <option value="">— none —</option>
@@ -1094,7 +1132,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v7.2';
+  const VERSION = 'v7.3';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -1219,7 +1257,7 @@
   function _dt(id, label, role, stage, days_offset, offset_direction = 'before', duration_days = null) {
     return { id, label, role, stage,
       days_before: offset_direction === 'after' ? -days_offset : days_offset,
-      days_offset, offset_direction, duration_days };
+      days_offset, offset_direction, duration_days, time: 0.25 };
   }
 
   const DEFAULT_TASKS = [
@@ -1769,14 +1807,118 @@
     return false;
   }
 
+  // Returns an array of total effort hours for each week in `weeks`, in order.
+  // All tasks (ticked or not) are included. Effort is spread proportionally
+  // across the start→due range; if no start date, all effort falls on the due week.
+  function computeWeeklyEffort(weeks) {
+    const effortMap = {};
+    for (const w of weeks) effortMap[w.key] = 0;
+
+    for (const t of appState.allTasks) {
+      if (t.isConcept) continue;
+      const hrs    = (t.taskDef && t.taskDef.time > 0) ? t.taskDef.time : 0.25;
+      const effDue = getEffectiveDueDate(t);
+      if (!effDue) continue;
+
+      const effStart = getEffectiveStartDate(t);
+      if (effStart && effStart < effDue) {
+        // Spread proportionally across each day in [effStart, effDue]
+        const days      = Math.round((effDue - effStart) / 86400000) + 1;
+        const dailyHrs  = hrs / days;
+        for (let d = 0; d < days; d++) {
+          const day = addDays(effStart, d);
+          const wk  = toWeekKey(day);
+          if (Object.prototype.hasOwnProperty.call(effortMap, wk)) effortMap[wk] += dailyHrs;
+        }
+      } else {
+        // All effort on the due-date week
+        const wk = toWeekKey(effDue);
+        if (Object.prototype.hasOwnProperty.call(effortMap, wk)) effortMap[wk] += hrs;
+      }
+    }
+
+    return weeks.map(w => effortMap[w.key]);
+  }
+
+  // Builds a smooth SVG line chart for the given weekly effort values.
+  // Returns an HTML string for an <svg> element.
+  function buildEffortChartSVG(effortValues) {
+    const N   = effortValues.length;
+    const VW  = N * 100;   // viewBox width  — 100 units per week column
+    const VH  = 60;        // viewBox height
+    const TOP = 9, BOT = 51; // y-axis data range (leaves margins)
+
+    const maxE = Math.max(...effortValues, 0.001);
+    const toY  = v => BOT - (v / maxE) * (BOT - TOP);
+
+    // One point per week, x at the horizontal centre of each column
+    const pts = effortValues.map((e, i) => ({ x: i * 100 + 50, y: toY(e) }));
+
+    // Catmull-Rom → cubic bezier smooth path
+    let pathD = `M${pts[0].x},${pts[0].y}`;
+    for (let i = 0; i < N - 1; i++) {
+      const p0 = pts[Math.max(0,     i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(N - 1, i + 2)];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      pathD += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+    }
+
+    // Area fill — close back along the bottom
+    const fillD = `${pathD} L${pts[N-1].x},${VH} L${pts[0].x},${VH} Z`;
+
+    // Subtle gridlines at 25 / 50 / 75 % of max effort
+    const gl = [0.25, 0.5, 0.75].map(f => toY(maxE * f));
+
+    let svg = `<svg viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="none" `
+            + `style="width:100%;height:60px;display:block;overflow:visible">`;
+
+    // Gridlines
+    for (const y of gl) {
+      svg += `<line x1="0" y1="${y.toFixed(1)}" x2="${VW}" y2="${y.toFixed(1)}" `
+           + `stroke="#21262d" stroke-width="0.8"/>`;
+    }
+
+    // Area fill
+    svg += `<path d="${fillD}" fill="#1f6feb" fill-opacity="0.10"/>`;
+
+    // Line stroke
+    svg += `<path d="${pathD}" fill="none" stroke="#388bfd" stroke-width="1.8" `
+         + `stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    // Data-point dots
+    for (const p of pts) {
+      svg += `<circle cx="${p.x}" cy="${p.y.toFixed(1)}" r="2.8" `
+           + `fill="#1a2a3a" stroke="#388bfd" stroke-width="1.5"/>`;
+    }
+
+    svg += `</svg>`;
+    return svg;
+  }
+
   function renderTimeline() {
     const container = document.getElementById('timeline');
     if (!appState.projects.length) { container.style.display = 'none'; return; }
 
     const weeks = getTimelineWeeks();
 
-    // ── Table header ──────────────────────────────────────────────────────────
-    let html = '<p class="section-label">Pipeline Timeline</p><div class="tl-wrap"><table class="tl-table"><thead><tr>';
+    // ── Effort chart row (above week headers) ─────────────────────────────────
+    const effortValues = computeWeeklyEffort(weeks);
+    const chartSVG     = buildEffortChartSVG(effortValues);
+
+    let html = '<p class="section-label">Pipeline Timeline</p><div class="tl-wrap"><table class="tl-table"><thead>';
+    // Chart row — label cell + single colspan cell containing the SVG
+    html += `<tr class="tl-chart-row">`;
+    html += `<th class="tl-th-label tl-chart-label">Task time effort</th>`;
+    html += `<th class="tl-chart-th" colspan="${weeks.length}">${chartSVG}</th>`;
+    html += `</tr>`;
+
+    // ── Week-header row ────────────────────────────────────────────────────────
+    html += '<tr>';
     html += '<th class="tl-th-label">Project</th>';
     for (const w of weeks) {
       html += `<th class="tl-th-month${w.isCurrentWeek ? ' tl-cur' : ''}">${esc(w.label)}</th>`;
@@ -1876,6 +2018,16 @@
           html += `</div>`;
         }
 
+        // Task labels for high-effort tasks (time ≥ 1 hr) due this week
+        const tasksInWeek = appState.allTasks.filter(t => {
+          if (t.isConcept || t.projectName !== project.name) return false;
+          const due = getEffectiveDueDate(t);
+          return due && toWeekKey(due) === w.key && (t.taskDef.time || 0) >= 1;
+        });
+        for (const t of tasksInWeek) {
+          html += `<div class="tl-task-label" title="${esc(t.taskDef.label)}">${esc(truncate(t.taskDef.label, 20))}</div>`;
+        }
+
         html += '</td>';
       }
 
@@ -1955,9 +2107,12 @@
       const dur              = row['duration_days'];
       const duration_days    = (dur !== '' && dur != null && !isNaN(parseFloat(dur)))
         ? parseFloat(dur) : null;
+      const timeVal          = row['time'];
+      const time             = (timeVal !== '' && timeVal != null && !isNaN(parseFloat(timeVal)) && parseFloat(timeVal) > 0)
+        ? parseFloat(timeVal) : 0.25;
       // days_before: positive = before stage date, negative = after
       const days_before = offset_direction === 'after' ? -days_offset : days_offset;
-      return { id, label, role, stage, days_before, days_offset, offset_direction, duration_days };
+      return { id, label, role, stage, days_before, days_offset, offset_direction, duration_days, time };
     }).filter(td => td.id && td.label && td.stage && VALID_STAGES.has(td.stage));
   }
 
@@ -2222,7 +2377,7 @@
         projectName:     ct.projectName,
         projectRole:     project ? project.role : '',
         stage:           ct.stage,
-        taskDef:         { id: ct.id, label: ct.label, role: ct.role || (project ? project.role : ''), stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
+        taskDef:         { id: ct.id, label: ct.label, role: ct.role || (project ? project.role : ''), stage: ct.stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null, time: ct.time || 0.25 },
         dueDate,
         startDate:       null,
         actualStageDate: null,
@@ -3367,6 +3522,7 @@
     const ctStage   = document.getElementById('ctStage');
     const ctLabel   = document.getElementById('ctLabel');
     const ctDueDate = document.getElementById('ctDueDate');
+    const ctTime    = document.getElementById('ctTime');
     const ctRole    = document.getElementById('ctRole');
     const ctCancel  = document.getElementById('ctCancel');
     const ctSave    = document.getElementById('ctSave');
@@ -3387,6 +3543,7 @@
       // Default due date to today
       ctDueDate.value = new Date().toISOString().split('T')[0];
       ctLabel.value   = '';
+      ctTime.value    = '';
       modal.style.display = 'flex';
       ctLabel.focus();
     }
@@ -3410,6 +3567,7 @@
       const label       = ctLabel.value.trim();
       const dueDateStr  = ctDueDate.value;
       const role        = ctRole.value;
+      const time        = parseFloat(ctTime.value) > 0 ? parseFloat(ctTime.value) : 0.25;
 
       if (!label)        { alert('Please enter a task name.'); return; }
       if (!dueDateStr)   { alert('Please select a due date.'); return; }
@@ -3419,7 +3577,7 @@
 
       // Create and persist custom task
       const id = `custom_${Date.now()}`;
-      const ct = { id, projectName, stage, label, role, dueDate: dueDateStr };
+      const ct = { id, projectName, stage, label, role, time, dueDate: dueDateStr };
       appState.customTasks.push(ct);
 
       // Add directly to allTasks (no full reload needed)
@@ -3429,7 +3587,7 @@
         projectName,
         projectRole,
         stage,
-        taskDef:         { id, label, role, stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null },
+        taskDef:         { id, label, role, stage, days_before: 0, days_offset: 0, offset_direction: 'before', duration_days: null, time },
         dueDate,
         startDate:       null,
         actualStageDate: null,
