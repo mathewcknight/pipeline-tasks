@@ -329,7 +329,7 @@
   function _dt(id, label, role, stage, days_offset, offset_direction = 'before', duration_days = null) {
     return { id, label, role, stage,
       days_before: offset_direction === 'after' ? -days_offset : days_offset,
-      days_offset, offset_direction, duration_days, time: 0.25 };
+      days_offset, offset_direction, duration_days, time: 0.25, approval_authority: '' };
   }
 
   const DEFAULT_TASKS = [
@@ -1220,6 +1220,7 @@
       const timeVal          = row['time'];
       const time             = (timeVal !== '' && timeVal != null && !isNaN(parseFloat(timeVal)) && parseFloat(timeVal) > 0)
         ? parseFloat(timeVal) : 0.25;
+      const approval_authority = String(row['approval_authority'] || '').trim();
       // Warn on missing required fields
       if (!id)    log(`   ⚠  "Project Tasks" row ${idx + 2}: missing 'id' — row skipped.`, 'dl-warn');
       if (!label) log(`   ⚠  "Project Tasks" row ${idx + 2}: missing 'Task name' — row skipped.`, 'dl-warn');
@@ -1227,7 +1228,7 @@
       if (stage && !VALID_STAGES.has(stage)) log(`   ⚠  "Project Tasks" row ${idx + 2}: unrecognised stage "${stage}" — row skipped.`, 'dl-warn');
       // days_before: positive = before stage date, negative = after
       const days_before = offset_direction === 'after' ? -days_offset : days_offset;
-      return { id, label, role, stage, days_before, days_offset, offset_direction, duration_days, time };
+      return { id, label, role, stage, days_before, days_offset, offset_direction, duration_days, time, approval_authority };
     });
     return parsed.filter(td => td.id && td.label && td.stage && VALID_STAGES.has(td.stage));
   }
@@ -1424,9 +1425,16 @@
       for (const stage of ORDERED_STAGES) {
         if (!stagesToGen.has(stage)) continue;
 
-        const stageTasks = taskDefs.filter(t => t.stage === stage);
+        // Filter by approval_authority: blank = applies to all; non-blank = only for matching projects.
+        const projAuth   = (project.approvalAuthority || '').trim().toUpperCase();
+        const stageTasks = taskDefs
+          .filter(t => t.stage === stage)
+          .filter(t => {
+            const ta = (t.approval_authority || '').trim().toUpperCase();
+            return !ta || ta === projAuth;
+          });
         if (!stageTasks.length) {
-          if (verbose) log(`      ↳ no task defs found for stage "${stage}" — check task_definitions.xlsx`, 'dl-warn');
+          if (verbose) log(`      ↳ no task defs found for stage "${stage}" (after approval_authority filter) — check task_definitions.xlsx`, 'dl-warn');
           continue;
         }
 
@@ -1819,8 +1827,9 @@
 
     log(`${taskDefs.length} project task def(s):`, 'dl-ok');
     for (const td of taskDefs) {
-      const durStr = td.duration_days != null ? `  duration=${td.duration_days}d` : '';
-      log(`   [${td.stage}]  ${td.id}:  "${td.label}"  |  ${td.days_offset}d ${td.offset_direction}${durStr}  time=${td.time}hrs`, 'dl-dim');
+      const durStr  = td.duration_days != null ? `  duration=${td.duration_days}d` : '';
+      const authStr = td.approval_authority ? `  auth=${td.approval_authority}` : '';
+      log(`   [${td.stage}]  ${td.id}:  "${td.label}"  |  ${td.days_offset}d ${td.offset_direction}${durStr}  time=${td.time}hrs${authStr}`, 'dl-dim');
     }
     log(`${routineDefs.length} routine task def(s):`, routineDefs.length ? 'dl-ok' : 'dl-dim');
     for (const rt of routineDefs) {
