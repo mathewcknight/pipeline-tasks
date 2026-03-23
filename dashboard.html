@@ -1086,6 +1086,8 @@
         const stagesInWeek = Object.entries(project.stageDates)
           .filter(([stage, sd]) => {
             if (!sd || !sd.actual) return false;
+            // Only show Prescreen diamonds when the approver is Board
+            if (stage === 'Prescreen' && project.approvalAuthority !== 'Board') return false;
             const eff = getEffectiveStageActual(project.name, stage, sd.actual);
             return toWeekKey(eff) === w.key;
           })
