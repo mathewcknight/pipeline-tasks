@@ -77,9 +77,9 @@ body {
 
 /* ── Layout ── */
 #main {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -99,19 +99,11 @@ body {
 }
 
 /* ── Setup form ── */
-.setup-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-  margin: 16px 0 10px;
-}
-.setup-section-label:first-of-type { margin-top: 0; }
 .setup-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  grid-template-columns: minmax(180px, 2fr) 140px repeat(7, minmax(100px, 1fr));
   gap: 10px;
+  align-items: end;
 }
 .field-group {
   display: flex;
@@ -500,7 +492,6 @@ function getSetup(id) {
     projectName: '',
     approvalAuthority: '',
     stageDates: Object.fromEntries(DATE_STAGES.map(s => [s, ''])),
-    roles: { analyst: '', analystAssisting: '', manager: '', associateDirector: '', generalManager: '' }
   };
 }
 
@@ -584,7 +575,7 @@ function renderSetupPanel() {
   const setup = getSetup(state.activeId);
   const panel = document.getElementById('setup-panel');
 
-  const stageRows = DATE_STAGES.map(stage => `
+  const dateFields = DATE_STAGES.map(stage => `
     <div class="field-group">
       <label>${esc(stage)}</label>
       <input type="date" id="f-date-${esc(stage.replace(/ /g, '-'))}"
@@ -593,11 +584,8 @@ function renderSetupPanel() {
 
   panel.innerHTML = `
   <div class="card">
-    <div class="card-title">Project Setup</div>
-
-    <div class="setup-section-label">Project</div>
     <div class="setup-grid">
-      <div class="field-group field-wide" style="max-width:360px">
+      <div class="field-group">
         <label>Project Name</label>
         <input type="text" id="f-name" value="${esc(setup.projectName)}" placeholder="Enter project name">
       </div>
@@ -610,36 +598,9 @@ function renderSetupPanel() {
           <option value="CIO"    ${setup.approvalAuthority === 'CIO'    ? 'selected' : ''}>CIO</option>
         </select>
       </div>
+      ${dateFields}
     </div>
-
-    <div class="setup-section-label">Assessment Dates</div>
-    <div class="setup-grid">${stageRows}</div>
-
-    <div class="setup-section-label">Team Roles</div>
-    <div class="setup-grid">
-      <div class="field-group">
-        <label>Investment Analyst</label>
-        <input type="text" id="f-r-analyst" value="${esc(setup.roles.analyst)}" placeholder="Name">
-      </div>
-      <div class="field-group">
-        <label>Investment Analyst (Assisting)</label>
-        <input type="text" id="f-r-assisting" value="${esc(setup.roles.analystAssisting)}" placeholder="Name">
-      </div>
-      <div class="field-group">
-        <label>Investment Manager</label>
-        <input type="text" id="f-r-manager" value="${esc(setup.roles.manager)}" placeholder="Name">
-      </div>
-      <div class="field-group">
-        <label>Investment Associate Director</label>
-        <input type="text" id="f-r-ad" value="${esc(setup.roles.associateDirector)}" placeholder="Name">
-      </div>
-      <div class="field-group">
-        <label>General Manager</label>
-        <input type="text" id="f-r-gm" value="${esc(setup.roles.generalManager)}" placeholder="Name">
-      </div>
-    </div>
-
-    <div>
+    <div style="margin-top:12px">
       <button class="btn-save" id="btn-save">Save</button>
       <span class="save-note" id="save-note">Saved</span>
     </div>
@@ -789,13 +750,6 @@ function readSetupForm() {
       stage,
       document.getElementById('f-date-' + stage.replace(/ /g, '-'))?.value || ''
     ])),
-    roles: {
-      analyst:           document.getElementById('f-r-analyst')?.value?.trim()   || '',
-      analystAssisting:  document.getElementById('f-r-assisting')?.value?.trim() || '',
-      manager:           document.getElementById('f-r-manager')?.value?.trim()   || '',
-      associateDirector: document.getElementById('f-r-ad')?.value?.trim()        || '',
-      generalManager:    document.getElementById('f-r-gm')?.value?.trim()        || '',
-    }
   };
 }
 
