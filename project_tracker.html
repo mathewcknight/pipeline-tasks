@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Tracker</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --radius:  6px;
+  --accent:  #58a6ff;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── Tab bar ── */
+#tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  overflow-x: auto;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 13px;
+  user-select: none;
+  transition: color 0.1s;
+}
+.tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.tab-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+.tab-add {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  line-height: 1;
+  margin-left: 4px;
+}
+.tab-add:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+
+/* ── Layout ── */
+#main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+/* ── Setup form ── */
+.setup-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin: 16px 0 10px;
+}
+.setup-section-label:first-of-type { margin-top: 0; }
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  gap: 10px;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-group label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.field-group input,
+.field-group select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  width: 100%;
+}
+.field-group input:focus,
+.field-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.field-group input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+.field-wide { grid-column: 1 / -1; }
+.btn-save {
+  margin-top: 18px;
+  background: #1f6feb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-save:hover { background: #388bfd; }
+.save-note {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 12px;
+  color: #3fb950;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.save-note.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="tab-bar"></div>
+<div id="main">
+  <div id="setup-panel"></div>
+  <div id="task-panels"></div>
+</div>
+
+<script>
+'use strict';
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const DATE_STAGES = ['EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Approval to Execute'];
+
+// ── Storage helpers ──────────────────────────────────────────────────────────
+
+function newId() {
+  return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+function loadTabs() {
+  let tabs = [];
+  let activeId = null;
+  try { tabs = JSON.parse(localStorage.getItem('pt_tabs') || '[]'); } catch {}
+  try { activeId = localStorage.getItem('pt_active'); } catch {}
+  if (!tabs.length) {
+    const id = newId();
+    tabs = [{ id, name: 'New Project' }];
+    activeId = id;
+  }
+  if (!tabs.find(t => t.id === activeId)) activeId = tabs[0].id;
+  return { tabs, activeId };
+}
+
+function saveTabs(tabs, activeId) {
+  localStorage.setItem('pt_tabs', JSON.stringify(tabs));
+  localStorage.setItem('pt_active', activeId);
+}
+
+function getSetup(id) {
+  try {
+    const s = JSON.parse(localStorage.getItem('pt_setup_' + id) || 'null');
+    if (s) return s;
+  } catch {}
+  return {
+    projectName: '',
+    approvalAuthority: '',
+    stageDates: Object.fromEntries(DATE_STAGES.map(s => [s, ''])),
+    roles: { analyst: '', analystAssisting: '', manager: '', associateDirector: '', generalManager: '' }
+  };
+}
+
+function saveSetup(id, setup) {
+  localStorage.setItem('pt_setup_' + id, JSON.stringify(setup));
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── App state ────────────────────────────────────────────────────────────────
+
+let state = loadTabs();  // { tabs, activeId }
+
+// ── Render: tab bar ──────────────────────────────────────────────────────────
+
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  let html = '';
+  for (const tab of state.tabs) {
+    const active = tab.id === state.activeId ? ' active' : '';
+    html += `<div class="tab${active}" data-tab-id="${esc(tab.id)}">
+      <span class="tab-name">${esc(tab.name || 'Unnamed')}</span>
+      ${state.tabs.length > 1
+        ? `<button class="tab-close" data-close-id="${esc(tab.id)}" title="Remove tab">×</button>`
+        : ''}
+    </div>`;
+  }
+  html += `<button class="tab-add" id="btn-add-tab" title="New project">+</button>`;
+  bar.innerHTML = html;
+}
+
+// ── Render: setup panel ──────────────────────────────────────────────────────
+
+function renderSetupPanel() {
+  const setup = getSetup(state.activeId);
+  const panel = document.getElementById('setup-panel');
+
+  const stageRows = DATE_STAGES.map(stage => `
+    <div class="field-group">
+      <label>${esc(stage)}</label>
+      <input type="date" id="f-date-${esc(stage.replace(/ /g, '-'))}"
+        value="${esc(setup.stageDates[stage] || '')}">
+    </div>`).join('');
+
+  panel.innerHTML = `
+  <div class="card">
+    <div class="card-title">Project Setup</div>
+
+    <div class="setup-section-label">Project</div>
+    <div class="setup-grid">
+      <div class="field-group field-wide" style="max-width:360px">
+        <label>Project Name</label>
+        <input type="text" id="f-name" value="${esc(setup.projectName)}" placeholder="Enter project name">
+      </div>
+      <div class="field-group">
+        <label>Approval Authority</label>
+        <select id="f-auth">
+          <option value="">— None —</option>
+          <option value="Board"  ${setup.approvalAuthority === 'Board'  ? 'selected' : ''}>Board</option>
+          <option value="CEO"    ${setup.approvalAuthority === 'CEO'    ? 'selected' : ''}>CEO</option>
+          <option value="CIO"    ${setup.approvalAuthority === 'CIO'    ? 'selected' : ''}>CIO</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="setup-section-label">Assessment Dates</div>
+    <div class="setup-grid">${stageRows}</div>
+
+    <div class="setup-section-label">Team Roles</div>
+    <div class="setup-grid">
+      <div class="field-group">
+        <label>Investment Analyst</label>
+        <input type="text" id="f-r-analyst" value="${esc(setup.roles.analyst)}" placeholder="Name">
+      </div>
+      <div class="field-group">
+        <label>Investment Analyst (Assisting)</label>
+        <input type="text" id="f-r-assisting" value="${esc(setup.roles.analystAssisting)}" placeholder="Name">
+      </div>
+      <div class="field-group">
+        <label>Investment Manager</label>
+        <input type="text" id="f-r-manager" value="${esc(setup.roles.manager)}" placeholder="Name">
+      </div>
+      <div class="field-group">
+        <label>Investment Associate Director</label>
+        <input type="text" id="f-r-ad" value="${esc(setup.roles.associateDirector)}" placeholder="Name">
+      </div>
+      <div class="field-group">
+        <label>General Manager</label>
+        <input type="text" id="f-r-gm" value="${esc(setup.roles.generalManager)}" placeholder="Name">
+      </div>
+    </div>
+
+    <div>
+      <button class="btn-save" id="btn-save">Save</button>
+      <span class="save-note" id="save-note">Saved</span>
+    </div>
+  </div>`;
+}
+
+// ── Render: task panels (placeholder until tasks are added) ──────────────────
+
+function renderTaskPanels() {
+  document.getElementById('task-panels').innerHTML = '';
+}
+
+// ── Full render ──────────────────────────────────────────────────────────────
+
+function renderAll() {
+  renderTabs();
+  renderSetupPanel();
+  renderTaskPanels();
+}
+
+// ── Read setup form ──────────────────────────────────────────────────────────
+
+function readSetupForm() {
+  return {
+    projectName:       document.getElementById('f-name')?.value?.trim() || '',
+    approvalAuthority: document.getElementById('f-auth')?.value || '',
+    stageDates: Object.fromEntries(DATE_STAGES.map(stage => [
+      stage,
+      document.getElementById('f-date-' + stage.replace(/ /g, '-'))?.value || ''
+    ])),
+    roles: {
+      analyst:           document.getElementById('f-r-analyst')?.value?.trim()   || '',
+      analystAssisting:  document.getElementById('f-r-assisting')?.value?.trim() || '',
+      manager:           document.getElementById('f-r-manager')?.value?.trim()   || '',
+      associateDirector: document.getElementById('f-r-ad')?.value?.trim()        || '',
+      generalManager:    document.getElementById('f-r-gm')?.value?.trim()        || '',
+    }
+  };
+}
+
+// ── Events ───────────────────────────────────────────────────────────────────
+
+document.addEventListener('click', e => {
+  // Switch tab
+  const tabEl = e.target.closest('.tab');
+  if (tabEl && !e.target.matches('.tab-close')) {
+    const id = tabEl.dataset.tabId;
+    if (id && id !== state.activeId) {
+      state.activeId = id;
+      saveTabs(state.tabs, state.activeId);
+      renderAll();
+    }
+    return;
+  }
+
+  // Close tab
+  if (e.target.matches('.tab-close')) {
+    const id = e.target.dataset.closeId;
+    if (state.tabs.length <= 1) return;
+    if (!confirm('Remove this project tab?')) return;
+    state.tabs = state.tabs.filter(t => t.id !== id);
+    if (state.activeId === id) state.activeId = state.tabs[0].id;
+    saveTabs(state.tabs, state.activeId);
+    renderAll();
+    return;
+  }
+
+  // Add tab
+  if (e.target.id === 'btn-add-tab') {
+    const id = newId();
+    state.tabs.push({ id, name: 'New Project' });
+    state.activeId = id;
+    saveTabs(state.tabs, state.activeId);
+    renderAll();
+    return;
+  }
+
+  // Save setup
+  if (e.target.id === 'btn-save') {
+    const setup = readSetupForm();
+    saveSetup(state.activeId, setup);
+    // Update tab label to project name
+    const tab = state.tabs.find(t => t.id === state.activeId);
+    if (tab) {
+      tab.name = setup.projectName || 'Unnamed Project';
+      saveTabs(state.tabs, state.activeId);
+      renderTabs();
+    }
+    renderTaskPanels();
+    // Flash "Saved" note
+    const note = document.getElementById('save-note');
+    if (note) {
+      note.classList.add('show');
+      setTimeout(() => note.classList.remove('show'), 2000);
+    }
+    return;
+  }
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
