@@ -261,6 +261,10 @@
     'Contract Processing':    ['Approval to Execute'],
   };
 
+  // Stages that require a Forecasted Application Approver to be set on the project.
+  // If approvalAuthority is blank, tasks for these stages are suppressed entirely.
+  const AUTHORITY_REQUIRED_STAGES = new Set(['Prescreen', 'Funding Approval', 'Approval to Execute']);
+
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
   const MONTH_TO_NUM = {
     january: '01', february: '02', march:    '03', april:    '04',
@@ -1201,8 +1205,8 @@
   }
 
   // Parse Sheet 1 (Project Tasks) from task_definitions.xlsx.
-  // Expected column headers (exact, case-sensitive):
-  //   id | Task name | Event | Usual Task Owner | days_offset_due | offset_direction | duration_days
+  // Expected column headers (case-sensitive except approval_authority which uses normalised lookup):
+  //   id | Task name | Event | Usual Task Owner | days_offset_due | offset_direction | duration_days | approval_authority
   // Returns array of normalised task def objects with derived `days_before`.
   function parseProjectTasksSheet(rows) {
     // 'Concept' is a valid event/stage even though it has no assessment date column.
@@ -1220,7 +1224,9 @@
       const timeVal          = row['time'];
       const time             = (timeVal !== '' && timeVal != null && !isNaN(parseFloat(timeVal)) && parseFloat(timeVal) > 0)
         ? parseFloat(timeVal) : 0.25;
-      const approval_authority = String(row['approval_authority'] || '').trim();
+      // Case-insensitive lookup: accept 'approval_authority', 'Approval Authority', etc.
+      const _aaKey = Object.keys(row).find(k => k.trim().toLowerCase().replace(/[\s-]+/g, '_') === 'approval_authority');
+      const approval_authority = String((_aaKey ? row[_aaKey] : '') || '').trim();
       // Warn on missing required fields
       if (!id)    log(`   ⚠  "Project Tasks" row ${idx + 2}: missing 'id' — row skipped.`, 'dl-warn');
       if (!label) log(`   ⚠  "Project Tasks" row ${idx + 2}: missing 'Task name' — row skipped.`, 'dl-warn');
@@ -1422,11 +1428,17 @@
       }
 
       const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS)];
+      const projAuth = (project.approvalAuthority || '').trim().toUpperCase();
       for (const stage of ORDERED_STAGES) {
         if (!stagesToGen.has(stage)) continue;
 
+        // If project has no Forecasted Application Approver, suppress authority-gated stages.
+        if (!projAuth && AUTHORITY_REQUIRED_STAGES.has(stage)) {
+          if (verbose) log(`      ↳ ${stage}: skipped — no Forecasted Application Approver set for this project`, 'dl-warn');
+          continue;
+        }
+
         // Filter by approval_authority: blank = applies to all; non-blank = only for matching projects.
-        const projAuth   = (project.approvalAuthority || '').trim().toUpperCase();
         const stageTasks = taskDefs
           .filter(t => t.stage === stage)
           .filter(t => {
@@ -1583,6 +1595,13 @@
 
           taskDefs     = parseProjectTasksSheet(rows1);
           log(`   Sheet "Project Tasks": ${taskDefs.length} task def(s) loaded.`, 'dl-ok');
+          const withAuth = taskDefs.filter(t => t.approval_authority).length;
+          if (withAuth === 0) {
+            log(`   ⚠  No task defs have an approval_authority value — all tasks will generate for ALL projects.` +
+              ` If this is unintended, check that the column header in "Project Tasks" is named 'approval_authority'.`, 'dl-warn');
+          } else {
+            log(`   ${withAuth} task def(s) have approval_authority set.`, 'dl-dim');
+          }
         } else {
           log(`⚠  Sheet "Project Tasks" not found in task_definitions.xlsx — using built-ins. Available: ${wb.SheetNames.join(', ')}`, 'dl-warn');
         }
