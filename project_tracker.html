@@ -285,6 +285,89 @@ body {
 .full-table td:first-child { width: 28px; padding-left: 4px; }
 .full-table td:last-child  { text-align: right; width: 62px; }
 .full-table td:nth-child(3) { width: 110px; }
+
+/* ── Workload panel ── */
+.workload-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.workload-stat {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  text-align: center;
+}
+.workload-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.workload-stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.workload-section {
+  margin-bottom: 18px;
+}
+.workload-section:last-child { margin-bottom: 0; }
+.workload-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.workload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.workload-row:last-child { margin-bottom: 0; }
+.workload-row-label {
+  width: 130px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workload-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+}
+.workload-bar-done {
+  height: 100%;
+  background: #3fb950;
+  border-radius: 4px 0 0 4px;
+  transition: width 0.2s;
+}
+.workload-bar-remaining {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.workload-row-hrs {
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.workload-row-hrs strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -747,7 +830,91 @@ function renderTaskPanels() {
     ? `<div class="card"><div class="card-title">All Tasks</div>${stageGroupsHtml}</div>`
     : '';
 
-  document.getElementById('task-panels').innerHTML = summaryCard + fullListCard;
+  const workloadCard = renderWorkloadCard(setup, ticks);
+
+  document.getElementById('task-panels').innerHTML = summaryCard + fullListCard + workloadCard;
+}
+
+// ── Render: workload panel ────────────────────────────────────────────────────
+
+function renderWorkloadCard(setup, ticks) {
+  const visible = TASK_DEFINITIONS.filter(t => isTaskVisible(t, setup) && t.time !== null);
+  if (!visible.length) return '';
+
+  function hrs(tasks) { return tasks.reduce((s, t) => s + (t.time || 0), 0); }
+  function fmt(n)      { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+
+  const totalHrs     = hrs(visible);
+  const doneHrs      = hrs(visible.filter(t => !!ticks[tickKey(t)]));
+  const remainingHrs = totalHrs - doneHrs;
+
+  // Build bar HTML for a group of tasks with the same label
+  function bar(tasks) {
+    const total = hrs(tasks);
+    if (!total) return '<div class="workload-bar-track"></div>';
+    const done  = hrs(tasks.filter(t => !!ticks[tickKey(t)]));
+    const rem   = total - done;
+    const donePct = Math.round(done  / totalHrs * 100);
+    const remPct  = Math.round(rem   / totalHrs * 100);
+    return `<div class="workload-bar-track">
+      <div class="workload-bar-done"      style="width:${donePct}%"></div>
+      <div class="workload-bar-remaining" style="width:${remPct}%"></div>
+    </div>
+    <div class="workload-row-hrs"><strong>${fmt(done)}</strong> / ${fmt(total)} hrs</div>`;
+  }
+
+  // ── By Role ──
+  const roles = [...new Set(visible.map(t => t.role))].sort();
+  let byRoleHtml = '';
+  for (const role of roles) {
+    const tasks = visible.filter(t => t.role === role);
+    byRoleHtml += `<div class="workload-row">
+      <span class="workload-row-label">${esc(role)}</span>
+      ${bar(tasks)}
+    </div>`;
+  }
+
+  // ── By Stage ──
+  let byStageHtml = '';
+  for (const stage of STAGE_ORDER) {
+    const tasks = visible.filter(t => t.stage === stage);
+    if (!tasks.length) continue;
+    const sc = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
+    const label = `<span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border};font-size:10px">${esc(stage)}</span>`;
+    byStageHtml += `<div class="workload-row">
+      <span class="workload-row-label" style="width:160px">${label}</span>
+      ${bar(tasks)}
+    </div>`;
+  }
+
+  const doneColor      = doneHrs === totalHrs ? '#3fb950' : 'var(--text)';
+  const remainingColor = remainingHrs === 0    ? 'var(--muted)' : 'var(--accent)';
+
+  return `<div class="card" data-workload="1">
+    <div class="card-title">Workload Estimate</div>
+    <div class="workload-stats">
+      <div class="workload-stat">
+        <div class="workload-stat-value" style="color:${doneColor}">${fmt(doneHrs)}</div>
+        <div class="workload-stat-label">hrs done</div>
+      </div>
+      <div class="workload-stat">
+        <div class="workload-stat-value" style="color:${remainingColor}">${fmt(remainingHrs)}</div>
+        <div class="workload-stat-label">hrs remaining</div>
+      </div>
+      <div class="workload-stat">
+        <div class="workload-stat-value">${fmt(totalHrs)}</div>
+        <div class="workload-stat-label">hrs total</div>
+      </div>
+    </div>
+    <div class="workload-section">
+      <div class="workload-section-label">By Role</div>
+      ${byRoleHtml}
+    </div>
+    <div class="workload-section">
+      <div class="workload-section-label">By Stage</div>
+      ${byStageHtml}
+    </div>
+  </div>`;
 }
 
 // ── Full render ──────────────────────────────────────────────────────────────
@@ -795,6 +962,14 @@ document.addEventListener('change', e => {
   document.querySelectorAll('.task-row').forEach(row => {
     if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
   });
+
+  // Re-render workload card in-place so numbers and bars stay current
+  const existing = document.querySelector('[data-workload]');
+  if (existing) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderWorkloadCard(getSetup(state.activeId), getTicks(state.activeId));
+    if (tmp.firstElementChild) existing.replaceWith(tmp.firstElementChild);
+  }
 });
 
 document.addEventListener('click', e => {
