@@ -229,14 +229,62 @@ body {
 .due-soon    { color: #d29922; font-weight: 600; font-size: 12px; }
 .due-normal  { color: var(--muted); font-size: 12px; }
 
-/* ── Checkbox ── */
-input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
+/* ── Full task list ── */
+.stage-group { border-bottom: 1px solid var(--border); }
+.stage-group:last-child { border-bottom: none; }
+.stage-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
   cursor: pointer;
-  accent-color: var(--accent);
+  user-select: none;
+}
+.stage-header:hover { opacity: 0.85; }
+.stage-toggle {
+  font-size: 10px;
+  color: var(--muted);
+  width: 14px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.stage-toggle.open { transform: rotate(90deg); }
+.stage-counter {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stage-progress {
+  width: 52px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
   flex-shrink: 0;
 }
+.stage-progress-fill {
+  height: 100%;
+  background: #3fb950;
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+.stage-body { display: none; padding-bottom: 4px; }
+.stage-body.open { display: block; }
+
+.full-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.full-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(48,54,61,0.4);
+  vertical-align: middle;
+}
+.full-table tr:last-child td { border-bottom: none; }
+.full-table td:first-child { width: 28px; padding-left: 4px; }
+.full-table td:last-child  { text-align: right; width: 62px; }
+.full-table td:nth-child(3) { width: 110px; }
 </style>
 </head>
 <body>
@@ -463,6 +511,14 @@ function saveTicks(id, ticks) {
   localStorage.setItem('pt_ticks_' + id, JSON.stringify(ticks));
 }
 
+function getCollapsed(id) {
+  try { return new Set(JSON.parse(localStorage.getItem('pt_collapse_' + id) || '[]')); } catch { return new Set(); }
+}
+
+function saveCollapsed(id, set) {
+  localStorage.setItem('pt_collapse_' + id, JSON.stringify([...set]));
+}
+
 // ── Business logic ────────────────────────────────────────────────────────────
 
 function isTaskVisible(task, setup) {
@@ -589,50 +645,109 @@ function renderSetupPanel() {
 
 // ── Render: task panels ───────────────────────────────────────────────────────
 
-function renderTaskPanels() {
-  const setup  = getSetup(state.activeId);
-  const ticks  = getTicks(state.activeId);
-  const today  = new Date(); today.setHours(0, 0, 0, 0);
-  const cutoff = new Date(today); cutoff.setDate(today.getDate() + 14);
+function dueCls(due, today) {
+  if (!due) return '';
+  if (due < today) return 'due-overdue';
+  if (due <= new Date(today.getTime() + 7 * 86400000)) return 'due-soon';
+  return 'due-normal';
+}
 
-  // Collect tasks due within the next 14 days (including overdue), sorted by date
+function renderTaskPanels() {
+  const setup     = getSetup(state.activeId);
+  const ticks     = getTicks(state.activeId);
+  const collapsed = getCollapsed(state.activeId);
+  const today     = new Date(); today.setHours(0, 0, 0, 0);
+  const cutoff    = new Date(today); cutoff.setDate(today.getDate() + 14);
+
+  // ── Summary panel (next 14 days) ──
   const upcoming = TASK_DEFINITIONS
     .filter(t => isTaskVisible(t, setup))
     .map(t => ({ task: t, due: computeDueDate(t, setup) }))
     .filter(({ due }) => due !== null && due <= cutoff)
     .sort((a, b) => a.due - b.due);
 
-  // Summary rows
-  let rows = '';
+  let summaryRows = '';
   for (const { task, due } of upcoming) {
     const key    = tickKey(task);
     const ticked = !!ticks[key];
     const sc     = STAGE_COLORS[task.stage] || STAGE_COLORS['Concept'];
-    const past   = due < today;
-    const soon   = !past && due <= new Date(today.getTime() + 7 * 86400000);
-    const dueClass = past ? 'due-overdue' : soon ? 'due-soon' : 'due-normal';
+    const cls    = dueCls(due, today);
     const dueTxt = due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 
-    rows += `<tr class="task-row${ticked ? ' ticked' : ''}" data-key="${esc(key)}">
+    summaryRows += `<tr class="task-row${ticked ? ' ticked' : ''}" data-key="${esc(key)}">
       <td><input type="checkbox" class="task-cb" data-key="${esc(key)}"${ticked ? ' checked' : ''}></td>
-      <td>
-        <span class="check-icon">✓</span>
-        <span class="task-label">${esc(task.label)}</span>
-      </td>
+      <td><span class="check-icon">✓</span><span class="task-label">${esc(task.label)}</span></td>
       <td><span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(task.stage)}</span></td>
-      <td><span class="${dueClass}">${esc(dueTxt)}</span></td>
+      <td><span class="${cls}">${esc(dueTxt)}</span></td>
     </tr>`;
   }
 
-  const summaryHtml = upcoming.length
-    ? `<table class="summary-table">
-        <thead><tr><th></th><th>Task</th><th>Stage</th><th>Due</th></tr></thead>
-        <tbody>${rows}</tbody>
-       </table>`
-    : `<div class="summary-empty">No tasks due in the next 14 days</div>`;
+  const summaryCard = `<div class="card"><div class="card-title">Next 2 Weeks</div>
+    ${upcoming.length
+      ? `<table class="summary-table">
+           <thead><tr><th></th><th>Task</th><th>Stage</th><th>Due</th></tr></thead>
+           <tbody>${summaryRows}</tbody>
+         </table>`
+      : `<div class="summary-empty">No tasks due in the next 14 days</div>`}
+  </div>`;
 
-  document.getElementById('task-panels').innerHTML =
-    `<div class="card"><div class="card-title">Next 2 Weeks</div>${summaryHtml}</div>`;
+  // ── Full task list grouped by stage ──
+  let stageGroupsHtml = '';
+  let anyVisible = false;
+
+  for (const stage of STAGE_ORDER) {
+    const tasks = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    if (!tasks.length) continue;
+    anyVisible = true;
+
+    const sc      = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
+    const isOpen  = !collapsed.has(stage);
+    const done    = tasks.filter(t => !!ticks[tickKey(t)]).length;
+    const pct     = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+
+    let taskRows = '';
+    for (const task of tasks) {
+      const key    = tickKey(task);
+      const ticked = !!ticks[key];
+      const due    = computeDueDate(task, setup);
+      const cls    = dueCls(due, today);
+      const dueTxt = due
+        ? due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+        : '—';
+
+      // Role badge
+      const rc = ROLE_COLORS[task.role] || ROLE_COLORS['Analyst'];
+      const roleBadge = `<span class="role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(task.role)}</span>`;
+
+      taskRows += `<tr class="task-row${ticked ? ' ticked' : ''}" data-key="${esc(key)}">
+        <td><input type="checkbox" class="task-cb" data-key="${esc(key)}"${ticked ? ' checked' : ''}></td>
+        <td><span class="check-icon">✓</span><span class="task-label">${esc(task.label)}</span></td>
+        <td>${roleBadge}</td>
+        <td><span class="${cls || 'due-normal'}">${esc(dueTxt)}</span></td>
+      </tr>`;
+    }
+
+    stageGroupsHtml += `
+    <div class="stage-group">
+      <div class="stage-header" data-stage="${esc(stage)}">
+        <span class="stage-toggle${isOpen ? ' open' : ''}">▶</span>
+        <span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(stage)}</span>
+        <div class="stage-progress" title="${done}/${tasks.length} done">
+          <div class="stage-progress-fill" style="width:${pct}%"></div>
+        </div>
+        <span class="stage-counter">${done}/${tasks.length}</span>
+      </div>
+      <div class="stage-body${isOpen ? ' open' : ''}">
+        <table class="full-table"><tbody>${taskRows}</tbody></table>
+      </div>
+    </div>`;
+  }
+
+  const fullListCard = anyVisible
+    ? `<div class="card"><div class="card-title">All Tasks</div>${stageGroupsHtml}</div>`
+    : '';
+
+  document.getElementById('task-panels').innerHTML = summaryCard + fullListCard;
 }
 
 // ── Full render ──────────────────────────────────────────────────────────────
@@ -683,6 +798,21 @@ document.addEventListener('change', e => {
 });
 
 document.addEventListener('click', e => {
+  // Toggle stage section
+  const hdr = e.target.closest('.stage-header');
+  if (hdr) {
+    const stage     = hdr.dataset.stage;
+    const collapsed = getCollapsed(state.activeId);
+    const body      = hdr.nextElementSibling;
+    const icon      = hdr.querySelector('.stage-toggle');
+    const isOpen    = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    icon.classList.toggle('open', !isOpen);
+    if (isOpen) collapsed.add(stage); else collapsed.delete(stage);
+    saveCollapsed(state.activeId, collapsed);
+    return;
+  }
+
   // Switch tab
   const tabEl = e.target.closest('.tab');
   if (tabEl && !e.target.matches('.tab-close')) {
