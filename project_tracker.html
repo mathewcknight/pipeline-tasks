@@ -286,88 +286,12 @@ body {
 .full-table td:last-child  { text-align: right; width: 62px; }
 .full-table td:nth-child(3) { width: 110px; }
 
-/* ── Workload panel ── */
-.workload-stats {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.workload-stat {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  text-align: center;
-}
-.workload-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 4px;
-}
-.workload-stat-label {
-  font-size: 11px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.workload-section {
-  margin-bottom: 18px;
-}
-.workload-section:last-child { margin-bottom: 0; }
-.workload-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-  margin-bottom: 10px;
-}
-.workload-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 7px;
-}
-.workload-row:last-child { margin-bottom: 0; }
-.workload-row-label {
-  width: 130px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workload-bar-track {
-  flex: 1;
-  height: 8px;
-  background: var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-}
-.workload-bar-done {
-  height: 100%;
-  background: #3fb950;
-  border-radius: 4px 0 0 4px;
-  transition: width 0.2s;
-}
-.workload-bar-remaining {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s;
-}
-.workload-row-hrs {
-  width: 90px;
-  flex-shrink: 0;
-  text-align: right;
+/* ── Stage date in header ── */
+.stage-date {
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
 }
-.workload-row-hrs strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -383,11 +307,9 @@ body {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const DATE_STAGES = ['EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Approval to Execute'];
+const DATE_STAGES = ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Funding Agreement', 'Approval to Execute'];
 
-const STAGE_ORDER = ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Funding Agreement', 'Approval to Execute'];
-
-const AUTH_REQUIRED = new Set(['Prescreen', 'Funding Approval', 'Approval to Execute']);
+const STAGE_ORDER = DATE_STAGES;
 
 const STAGE_COLORS = {
   'Concept':             { bg: '#1c2128', text: '#8b949e', border: '#4a5568' },
@@ -606,9 +528,7 @@ function saveCollapsed(id, set) {
 
 function isTaskVisible(task, setup) {
   const auth = setup.approvalAuthority;
-  // Suppress all tasks in authority-gated stages if no authority set
-  if (AUTH_REQUIRED.has(task.stage) && !auth) return false;
-  // Suppress tasks belonging to a different authority
+  // Show if no authority filter on this task, or if it matches the selected approver
   if (task.approval_authority !== null && task.approval_authority !== auth) return false;
   return true;
 }
@@ -810,14 +730,20 @@ function renderTaskPanels() {
       </tr>`;
     }
 
+    const stageDate = setup.stageDates[stage];
+    const stageDateTxt = stageDate
+      ? new Date(stageDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—';
+    const allDone = done === tasks.length;
+    const someDone = done > 0 && !allDone;
+
     stageGroupsHtml += `
     <div class="stage-group">
       <div class="stage-header" data-stage="${esc(stage)}">
+        <input type="checkbox" class="stage-cb" data-stage="${esc(stage)}"${allDone ? ' checked' : ''}>
         <span class="stage-toggle${isOpen ? ' open' : ''}">▶</span>
         <span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(stage)}</span>
-        <div class="stage-progress" title="${done}/${tasks.length} done">
-          <div class="stage-progress-fill" style="width:${pct}%"></div>
-        </div>
+        <span class="stage-date">${esc(stageDateTxt)}</span>
         <span class="stage-counter">${done}/${tasks.length}</span>
       </div>
       <div class="stage-body${isOpen ? ' open' : ''}">
@@ -830,91 +756,19 @@ function renderTaskPanels() {
     ? `<div class="card"><div class="card-title">All Tasks</div>${stageGroupsHtml}</div>`
     : '';
 
-  const workloadCard = renderWorkloadCard(setup, ticks);
-
-  document.getElementById('task-panels').innerHTML = summaryCard + fullListCard + workloadCard;
+  document.getElementById('task-panels').innerHTML = summaryCard + fullListCard;
+  applyStageIndeterminate();
 }
 
-// ── Render: workload panel ────────────────────────────────────────────────────
-
-function renderWorkloadCard(setup, ticks) {
-  const visible = TASK_DEFINITIONS.filter(t => isTaskVisible(t, setup) && t.time !== null);
-  if (!visible.length) return '';
-
-  function hrs(tasks) { return tasks.reduce((s, t) => s + (t.time || 0), 0); }
-  function fmt(n)      { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
-
-  const totalHrs     = hrs(visible);
-  const doneHrs      = hrs(visible.filter(t => !!ticks[tickKey(t)]));
-  const remainingHrs = totalHrs - doneHrs;
-
-  // Build bar HTML for a group of tasks with the same label
-  function bar(tasks) {
-    const total = hrs(tasks);
-    if (!total) return '<div class="workload-bar-track"></div>';
-    const done  = hrs(tasks.filter(t => !!ticks[tickKey(t)]));
-    const rem   = total - done;
-    const donePct = Math.round(done  / totalHrs * 100);
-    const remPct  = Math.round(rem   / totalHrs * 100);
-    return `<div class="workload-bar-track">
-      <div class="workload-bar-done"      style="width:${donePct}%"></div>
-      <div class="workload-bar-remaining" style="width:${remPct}%"></div>
-    </div>
-    <div class="workload-row-hrs"><strong>${fmt(done)}</strong> / ${fmt(total)} hrs</div>`;
-  }
-
-  // ── By Role ──
-  const roles = [...new Set(visible.map(t => t.role))].sort();
-  let byRoleHtml = '';
-  for (const role of roles) {
-    const tasks = visible.filter(t => t.role === role);
-    byRoleHtml += `<div class="workload-row">
-      <span class="workload-row-label">${esc(role)}</span>
-      ${bar(tasks)}
-    </div>`;
-  }
-
-  // ── By Stage ──
-  let byStageHtml = '';
-  for (const stage of STAGE_ORDER) {
-    const tasks = visible.filter(t => t.stage === stage);
-    if (!tasks.length) continue;
-    const sc = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
-    const label = `<span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border};font-size:10px">${esc(stage)}</span>`;
-    byStageHtml += `<div class="workload-row">
-      <span class="workload-row-label" style="width:160px">${label}</span>
-      ${bar(tasks)}
-    </div>`;
-  }
-
-  const doneColor      = doneHrs === totalHrs ? '#3fb950' : 'var(--text)';
-  const remainingColor = remainingHrs === 0    ? 'var(--muted)' : 'var(--accent)';
-
-  return `<div class="card" data-workload="1">
-    <div class="card-title">Workload Estimate</div>
-    <div class="workload-stats">
-      <div class="workload-stat">
-        <div class="workload-stat-value" style="color:${doneColor}">${fmt(doneHrs)}</div>
-        <div class="workload-stat-label">hrs done</div>
-      </div>
-      <div class="workload-stat">
-        <div class="workload-stat-value" style="color:${remainingColor}">${fmt(remainingHrs)}</div>
-        <div class="workload-stat-label">hrs remaining</div>
-      </div>
-      <div class="workload-stat">
-        <div class="workload-stat-value">${fmt(totalHrs)}</div>
-        <div class="workload-stat-label">hrs total</div>
-      </div>
-    </div>
-    <div class="workload-section">
-      <div class="workload-section-label">By Role</div>
-      ${byRoleHtml}
-    </div>
-    <div class="workload-section">
-      <div class="workload-section-label">By Stage</div>
-      ${byStageHtml}
-    </div>
-  </div>`;
+function applyStageIndeterminate() {
+  const setup = getSetup(state.activeId);
+  const ticks = getTicks(state.activeId);
+  document.querySelectorAll('.stage-cb').forEach(cb => {
+    const tasks = TASK_DEFINITIONS.filter(t => t.stage === cb.dataset.stage && isTaskVisible(t, setup));
+    const done  = tasks.filter(t => !!ticks[tickKey(t)]).length;
+    cb.checked       = tasks.length > 0 && done === tasks.length;
+    cb.indeterminate = done > 0 && done < tasks.length;
+  });
 }
 
 // ── Full render ──────────────────────────────────────────────────────────────
@@ -948,7 +802,24 @@ function readSetupForm() {
 // ── Events ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('change', e => {
+  // Stage-level checkbox: tick/untick all tasks in that stage
+  if (e.target.matches('.stage-cb')) {
+    const stage = e.target.dataset.stage;
+    const setup = getSetup(state.activeId);
+    const ticks = getTicks(state.activeId);
+    const tasks = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    for (const t of tasks) {
+      if (e.target.checked) ticks[tickKey(t)] = true;
+      else delete ticks[tickKey(t)];
+    }
+    saveTicks(state.activeId, ticks);
+    renderTaskPanels();
+    return;
+  }
+
   if (!e.target.matches('.task-cb')) return;
+
+  // Individual task checkbox
   const key   = e.target.dataset.key;
   const ticks = getTicks(state.activeId);
   if (e.target.checked) ticks[key] = true;
@@ -963,19 +834,14 @@ document.addEventListener('change', e => {
     if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
   });
 
-  // Re-render workload card in-place so numbers and bars stay current
-  const existing = document.querySelector('[data-workload]');
-  if (existing) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = renderWorkloadCard(getSetup(state.activeId), getTicks(state.activeId));
-    if (tmp.firstElementChild) existing.replaceWith(tmp.firstElementChild);
-  }
+  // Update stage checkbox state for the affected stage
+  applyStageIndeterminate();
 });
 
 document.addEventListener('click', e => {
-  // Toggle stage section
+  // Toggle stage section (ignore clicks on the stage checkbox itself)
   const hdr = e.target.closest('.stage-header');
-  if (hdr) {
+  if (hdr && !e.target.matches('.stage-cb')) {
     const stage     = hdr.dataset.stage;
     const collapsed = getCollapsed(state.activeId);
     const body      = hdr.nextElementSibling;
