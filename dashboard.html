@@ -47,7 +47,7 @@
   <div class="page-header">
     <div class="page-header-left">
       <h1>MK MEGADASH</h1>
-      <p class="subtitle">Mathew Knight — Grant Pipeline Manager <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
+      <p class="subtitle">Personal Pipeline Tracker <span id="appVersion" style="opacity:.5;font-size:.75em"></span></p>
     </div>
     <!-- Summary cards (hidden until data loads) -->
     <div id="summaryCards" style="display:none">
@@ -70,11 +70,28 @@
     ⚠️ Firefox does not fully support <code>showDirectoryPicker()</code>. Please use Chrome or Edge for full functionality.
   </div>
 
+  <!-- Setup instructions — shown before folder selection, hidden after load -->
+  <div id="setupInstructions" class="setup-instructions">
+    <h2 class="setup-instructions-title">Setup Instructions</h2>
+    <ol class="setup-instructions-list">
+      <li>Open the GMS Reporting folder called <strong>Pipeline Sheet</strong> and save a copy of the <strong>Megadash Pipeline</strong> report. Update the filters to show your own name instead of MK.</li>
+      <li>When you want to refresh your data, download a fresh report as <strong>Details Only, xlsx format</strong> and save it to your dashboard folder, replacing the existing <code>pipeline_data.xlsx</code>.</li>
+      <li>Make sure all required files are in the same folder: <code>dashboard.html</code>, <code>dashboard.css</code>, <code>pipeline_data.xlsx</code>, <code>panel_dates.xlsx</code>, <code>task_definitions.xlsx</code>, <code>xlsx.full.min.js</code>.</li>
+      <li>Click <strong>Select Dashboard Folder</strong> to load your data.</li>
+    </ol>
+  </div>
+
   <div class="controls">
     <button id="btnSelectFolder" class="btn btn-primary">Select Dashboard Folder</button>
     <button id="btnReload" class="btn btn-secondary">Reload Data</button>
     <button id="btnClearData" class="btn btn-secondary" style="display:none">Clear Saved Data</button>
     <span id="status">No folder selected.</span>
+  </div>
+
+  <!-- Stale data warning — shown if pipeline_data.xlsx is more than 7 days old -->
+  <div id="staleWarning" class="alert alert-warn stale-warning" style="display:none">
+    <span>⚠ Pipeline data is more than 7 days old — consider downloading a fresh report.</span>
+    <button id="staleWarnDismiss" class="stale-dismiss" aria-label="Dismiss">✕</button>
   </div>
 
   <!-- Timeline (hidden until data loads) -->
@@ -204,7 +221,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v7.4';
+  const VERSION = 'v8.0';
 
   const MK_NAME = 'Mathew Knight';
   const LS_KEY  = 'pipeline_dashboard_state';
@@ -318,12 +335,13 @@
   };
 
   const IMPACT_TEAM_BG = {
-    'Solar':            'linear-gradient(rgba(234,179,8,0.13),rgba(234,179,8,0.13)),#161b22',
-    'Transport':        'linear-gradient(rgba(34,197,94,0.10),rgba(34,197,94,0.10)),#161b22',
-    'Grid and Storage': 'linear-gradient(rgba(236,72,153,0.10),rgba(236,72,153,0.10)),#161b22',
-    'Heavy Industry':   'linear-gradient(rgba(185,28,28,0.14),rgba(185,28,28,0.14)),#161b22',
-    'Hydrogen':         'linear-gradient(rgba(168,85,247,0.11),rgba(168,85,247,0.11)),#161b22',
-    'DER':              'linear-gradient(rgba(249,115,22,0.11),rgba(249,115,22,0.11)),#161b22',
+    'Solar':                       'linear-gradient(rgba(234,179,8,0.13),rgba(234,179,8,0.13)),#161b22',
+    'Transport':                   'linear-gradient(rgba(34,197,94,0.10),rgba(34,197,94,0.10)),#161b22',
+    'Grid and Storage':            'linear-gradient(rgba(236,72,153,0.10),rgba(236,72,153,0.10)),#161b22',
+    'Heavy Industry':              'linear-gradient(rgba(185,28,28,0.14),rgba(185,28,28,0.14)),#161b22',
+    'Hydrogen':                    'linear-gradient(rgba(168,85,247,0.11),rgba(168,85,247,0.11)),#161b22',
+    'DER':                         'linear-gradient(rgba(249,115,22,0.11),rgba(249,115,22,0.11)),#161b22',
+    'Distributed Energy Resources':'linear-gradient(rgba(249,115,22,0.11),rgba(249,115,22,0.11)),#161b22',
   };
 
   // Default task definitions — used if task_definitions.xlsx is absent or unparseable.
@@ -1960,6 +1978,18 @@
     document.getElementById('btnReload').style.display   = 'inline-block';
     document.getElementById('btnClearData').style.display = 'inline-block';
 
+    // Hide setup instructions once data has loaded successfully
+    document.getElementById('setupInstructions').style.display = 'none';
+
+    // Stale data warning: show if pipeline_data.xlsx is more than 7 days old
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const staleEl = document.getElementById('staleWarning');
+    if (pipelineFile.lastModified && (Date.now() - pipelineFile.lastModified) > sevenDaysMs) {
+      staleEl.style.display = 'flex';
+    } else {
+      staleEl.style.display = 'none';
+    }
+
     // Persist fresh due dates so next reload can detect shifts
     saveState();
   }
@@ -2068,7 +2098,7 @@
 
     // Rebuild option list grouped by impact team, preserving the previous selection.
     // Within each group, projects are sorted by next activity (same as timeline).
-    const TEAM_ORDER = ['Solar', 'Transport', 'Grid and Storage'];
+    const TEAM_ORDER = ['Solar', 'Transport', 'Grid and Storage', 'Heavy Industry', 'Hydrogen', 'Distributed Energy Resources', 'DER'];
     const sorted = getSortedProjects();
     const groups = new Map(TEAM_ORDER.map(t => [t, []]));
     groups.set('Other', []);
@@ -2656,6 +2686,11 @@
 
   // Show version
   document.getElementById('appVersion').textContent = VERSION;
+
+  // Stale warning dismiss
+  document.getElementById('staleWarnDismiss').addEventListener('click', () => {
+    document.getElementById('staleWarning').style.display = 'none';
+  });
 
   // Firefox / unsupported browser detection
   if (typeof window.showDirectoryPicker !== 'function') {
