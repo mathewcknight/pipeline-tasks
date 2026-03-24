@@ -229,7 +229,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v8.2';
+  const VERSION = 'v8.3';
 
   let   MK_NAME    = localStorage.getItem('pipeline_user_name') || 'Mathew Knight';
   const LS_USER_KEY = 'pipeline_user_name';
@@ -284,7 +284,14 @@
     'Concept':                ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel'],
     'Expression of Interest': ['EOI Panel', 'Prescreen', 'Full App Panel'],
     'Full Application':       ['Prescreen', 'Full App Panel', 'Funding Approval'],
-    'Contract Processing':    ['Approval to Execute'],
+    'Funding Agreement':      ['Approval to Execute'],
+  };
+
+  // Alias mapping: raw values from the pipeline_data.xlsx "Stage" column → canonical
+  // stage names used in task definitions and throughout the UI.
+  // Display name is always the canonical (right-hand) name.
+  const STAGE_ALIASES = {
+    'Contract Processing': 'Funding Agreement',
   };
 
   // Stages that require a Forecasted Application Approver to be set on the project.
@@ -1271,8 +1278,8 @@
   //   id | Task name | Event | Usual Task Owner | days_offset_due | offset_direction | duration_days | approval_authority
   // Returns array of normalised task def objects with derived `days_before`.
   function parseProjectTasksSheet(rows) {
-    // 'Concept' is a valid event/stage even though it has no assessment date column.
-    const VALID_STAGES = new Set([...Object.keys(STAGE_COLUMNS), 'Concept']);
+    // 'Concept' and alias targets are valid stages even though they have no date column of their own.
+    const VALID_STAGES = new Set([...Object.keys(STAGE_COLUMNS), 'Concept', ...Object.values(STAGE_ALIASES)]);
     const parsed = rows.map((row, idx) => {
       const id               = String(row['id']                 || '').trim();
       const label            = String(row['Task name']          || '').trim();
@@ -1833,7 +1840,8 @@
         };
       }
 
-      const pipelineStage = (row[PIPELINE_STAGE_COL] || '').trim();
+      const rawPipelineStage = (row[PIPELINE_STAGE_COL] || '').trim();
+      const pipelineStage   = STAGE_ALIASES[rawPipelineStage] || rawPipelineStage;
 
       projects.push({
         name,
