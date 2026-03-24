@@ -4,11 +4,11 @@
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  FOLDER SETUP                                                                ║
-║  Open dashboard.html directly in Chrome or Edge. When prompted, select      ║
+║  Open megadash.html directly in Chrome or Edge. When prompted, select      ║
 ║  the folder that contains your data files.                                  ║
 ║                                                                              ║
 ║  xlsx.full.min.js (SheetJS) must be present in the DATA folder you select.  ║
-║  It can also live alongside dashboard.html as a fallback.                   ║
+║  It can also live alongside megadash.html as a fallback.                   ║
 ║                                                                              ║
 ║  REQUIRED DATA FILES (case-sensitive names)                                  ║
 ║    pipeline_data.xlsx       sheet: "MK Pipeline"                            ║
@@ -76,7 +76,7 @@
     <ol class="setup-instructions-list">
       <li>Open the GMS Reporting folder called <strong>Pipeline Sheet</strong> and save a copy of the <strong>Megadash Pipeline</strong> report. Update the filters to show your own name instead of MK.</li>
       <li>When you want to refresh your data, download a fresh report as <strong>Details Only, xlsx format</strong> and save it to your dashboard folder, replacing the existing <code>pipeline_data.xlsx</code>.</li>
-      <li>Make sure all required files are in the same folder: <code>dashboard.html</code>, <code>dashboard.css</code>, <code>pipeline_data.xlsx</code>, <code>panel_dates.xlsx</code>, <code>task_definitions.xlsx</code>, <code>xlsx.full.min.js</code>.</li>
+      <li>Make sure all required files are in the same folder: <code>megadash.html</code>, <code>megadash.css</code>, <code>pipeline_data.xlsx</code>, <code>panel_dates.xlsx</code>, <code>task_definitions.xlsx</code>, <code>xlsx.full.min.js</code>.</li>
       <li>Click <strong>Select Dashboard Folder</strong> to load your data.</li>
     </ol>
   </div>
@@ -213,7 +213,7 @@
   </div>
 
   <!-- SheetJS — loaded from the data folder at runtime; this tag is a fallback
-       for when xlsx.full.min.js sits alongside dashboard.html. -->
+       for when xlsx.full.min.js sits alongside megadash.html. -->
   <script src="xlsx.full.min.js"></script>
 
   <script>
@@ -1361,7 +1361,7 @@
 
   // Ensure XLSX (SheetJS) is available before any XLSX calls.
   // The static <script src="xlsx.full.min.js"> handles the case where the file
-  // sits alongside dashboard.html.  If that tag returned nothing (file not
+  // sits alongside megadash.html.  If that tag returned nothing (file not
   // found there), this function tries to load it from the user-selected data
   // folder via the File System Access API.
   // Returns true when XLSX is ready, false (with debug-panel messages) if not.
@@ -2890,7 +2890,7 @@
   log('   pipeline_data.xlsx      (sheet: "MK Pipeline")', 'dl-dim');
   log('   panel_dates.xlsx        (sheet: "Sheet1", wide format)', 'dl-dim');
   log('   task_definitions.xlsx   (optional — sheets: "Project Tasks" + "Routine Tasks")', 'dl-dim');
-  log('Also place xlsx.full.min.js alongside dashboard.html (not in the data folder).', 'dl-dim');
+  log('Also place xlsx.full.min.js alongside megadash.html (not in the data folder).', 'dl-dim');
   </script>
 
 </body>
