@@ -89,6 +89,13 @@
     <span id="status">No folder selected.</span>
   </div>
 
+  <!-- Name picker — shown when multiple candidate names tie for most-frequent -->
+  <div id="userNamePicker" style="display:none;align-items:center;gap:10px;padding:10px 0;flex-wrap:wrap">
+    <span>We found multiple possible names — which one are you?</span>
+    <select id="userNameSelect" class="btn btn-secondary" style="padding:4px 8px;cursor:pointer"></select>
+    <button id="btnConfirmUserName" class="btn btn-primary">Confirm</button>
+  </div>
+
   <!-- Stale data warning — shown if pipeline_data.xlsx is more than 7 days old -->
   <div id="staleWarning" class="alert alert-warn stale-warning" style="display:none">
     <span>⚠ Pipeline data is more than 7 days old — consider downloading a fresh report.</span>
@@ -222,10 +229,11 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v8.0';
+  const VERSION = 'v8.2';
 
-  const MK_NAME = 'Mathew Knight';
-  const LS_KEY  = 'pipeline_dashboard_state';
+  let   MK_NAME    = localStorage.getItem('pipeline_user_name') || 'Mathew Knight';
+  const LS_USER_KEY = 'pipeline_user_name';
+  const LS_KEY      = 'pipeline_dashboard_state';
 
   // Stage name → pipeline_data.xlsx column name
   const STAGE_COLUMNS = {
@@ -1225,6 +1233,39 @@
     return XLSX.utils.sheet_to_json(sheet, { defval: '' });
   }
 
+  // Always reads the first sheet in pipeline_data.xlsx regardless of its name.
+  async function parsePipelineFile(file) {
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+    const sheetName = wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+    return { rows, sheetName };
+  }
+
+  // Counts occurrences of each name across the 5 people columns.
+  // Returns { winner: string } if one name leads, or { winner: null, tied: string[] } on a tie.
+  function detectPipelineUserFromRows(rows) {
+    const DETECT_COLS = [
+      'Investment Analyst',
+      'Investment Analyst (Assisting)',
+      'Investment Manager',
+      'Investment Associate Director',
+      'General Manager',
+    ];
+    const counts = {};
+    for (const row of rows) {
+      for (const col of DETECT_COLS) {
+        const val = (row[col] || '').toString().trim();
+        if (val) counts[val] = (counts[val] || 0) + 1;
+      }
+    }
+    const entries = Object.entries(counts);
+    if (!entries.length) return { winner: null, tied: [] };
+    const maxCount = Math.max(...entries.map(([, c]) => c));
+    const top = entries.filter(([, c]) => c === maxCount).map(([n]) => n);
+    return top.length === 1 ? { winner: top[0], tied: [] } : { winner: null, tied: top };
+  }
+
   // Parse Sheet 1 (Project Tasks) from task_definitions.xlsx.
   // Expected column headers (case-sensitive except approval_authority which uses normalised lookup):
   //   id | Task name | Event | Usual Task Owner | days_offset_due | offset_direction | duration_days | approval_authority
@@ -1570,6 +1611,33 @@
     // ── 0. Ensure SheetJS is available ────────────────────────────────────────
     if (!await ensureXLSX()) return;
 
+    // ── 0b. Resolve pipeline user name ────────────────────────────────────────
+    const savedUser = localStorage.getItem(LS_USER_KEY);
+    if (savedUser) {
+      MK_NAME = savedUser;
+      log(`✓ pipeline_user_name loaded from localStorage: "${MK_NAME}"`, 'dl-ok');
+    } else {
+      const detectFile = await getFile('pipeline_data.xlsx');
+      if (detectFile) {
+        try {
+          const { rows: detectRows } = await parsePipelineFile(detectFile);
+          const { winner, tied } = detectPipelineUserFromRows(detectRows);
+          if (winner) {
+            MK_NAME = winner;
+            localStorage.setItem(LS_USER_KEY, winner);
+            log(`✓ Auto-detected pipeline user: "${winner}"`, 'dl-ok');
+          } else if (tied.length > 0) {
+            log(`⚠ Multiple candidate names tied — showing name picker.`, 'dl-warn');
+            showUserNamePicker(tied);
+            document.getElementById('status').textContent = 'Please confirm your name to continue loading.';
+            return; // Paused — picker confirm will call loadAllData() again
+          }
+        } catch (e) {
+          log(`⚠ Could not detect user name: ${e.message}. Using default.`, 'dl-warn');
+        }
+      }
+    }
+
     // ── 1. File reading ───────────────────────────────────────────────────────
     logSection('1. FILE READING');
 
@@ -1649,8 +1717,10 @@
     let pipelineRows, panelRows;
 
     try {
-      pipelineRows = await parseXLSX(pipelineFile, 'MK Pipeline');
-      log(`✓ pipeline_data.xlsx → "MK Pipeline":  ${pipelineRows.length} row(s)`, 'dl-ok');
+      const { rows: plRows, sheetName: plSheet } = await parsePipelineFile(pipelineFile);
+      pipelineRows = plRows;
+      log(`✓ pipeline_data.xlsx: reading sheet "${plSheet}"`, 'dl-ok');
+      log(`✓ pipeline_data.xlsx → "${plSheet}":  ${pipelineRows.length} row(s)`, 'dl-ok');
 
       // ── DEBUG: raw stage-column types from first 3 rows ──────────────────────
       log(`   Raw stage-column types (first ${Math.min(3, pipelineRows.length)} row(s)):`, 'dl-dim');
@@ -2652,6 +2722,25 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // USER NAME PICKER
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function showUserNamePicker(names) {
+    const sel = document.getElementById('userNameSelect');
+    sel.innerHTML = names.sort().map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    document.getElementById('userNamePicker').style.display = 'flex';
+  }
+
+  document.getElementById('btnConfirmUserName').addEventListener('click', () => {
+    const name = document.getElementById('userNameSelect').value;
+    if (!name) return;
+    localStorage.setItem(LS_USER_KEY, name);
+    MK_NAME = name;
+    document.getElementById('userNamePicker').style.display = 'none';
+    loadAllData();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // BUTTON HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2888,7 +2977,7 @@
   log(`${VERSION} ready. Click "Select Dashboard Folder" to begin.`, 'dl-dim');
   log('', '');
   log('Expected files in the selected folder:', 'dl-dim');
-  log('   pipeline_data.xlsx      (sheet: "MK Pipeline")', 'dl-dim');
+  log('   pipeline_data.xlsx      (first sheet used automatically)', 'dl-dim');
   log('   panel_dates.xlsx        (sheet: "Sheet1", wide format)', 'dl-dim');
   log('   task_definitions.xlsx   (optional — sheets: "Project Tasks" + "Routine Tasks")', 'dl-dim');
   log('Also place xlsx.full.min.js alongside megadash.html (not in the data folder).', 'dl-dim');
