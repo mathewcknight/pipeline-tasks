@@ -248,15 +248,15 @@
     .tl-cell.tl-cur-col { background: #0c1c2e; }
 
     /* Crunch-point tints — warm orange overlaid on the dark base.
-       Level 1 (≥ 5 h): subtle warmth. Level 2 (≥ 8 h): clearly busier. */
-    .tl-cell.tl-crunch-1                          { background: #1f1a14; }
-    .tl-cell.tl-crunch-2                          { background: #2a1d0e; }
-    .tl-cell.tl-cur-col.tl-crunch-1               { background: #161e2e; }
-    .tl-cell.tl-cur-col.tl-crunch-2               { background: #1e1e2a; }
-    .tl-row:hover .tl-cell.tl-crunch-1            { background: #252018; }
-    .tl-row:hover .tl-cell.tl-crunch-2            { background: #302212; }
-    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-1 { background: #1c2234; }
-    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-2 { background: #242230; }
+       Level 1 (≥ 4 h): noticeable warmth. Level 2 (≥ 7 h): clearly busier. */
+    .tl-cell.tl-crunch-1                          { background: #2e2010; }
+    .tl-cell.tl-crunch-2                          { background: #3d2408; }
+    .tl-cell.tl-cur-col.tl-crunch-1               { background: #1e2538; }
+    .tl-cell.tl-cur-col.tl-crunch-2               { background: #2a2318; }
+    .tl-row:hover .tl-cell.tl-crunch-1            { background: #382818; }
+    .tl-row:hover .tl-cell.tl-crunch-2            { background: #48280c; }
+    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-1 { background: #242d40; }
+    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-2 { background: #322a20; }
 
     /* Stage assessment markers */
     .tl-stage-marker {

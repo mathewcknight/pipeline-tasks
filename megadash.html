@@ -229,7 +229,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v8.4';
+  const VERSION = 'v8.5';
 
   let   MK_NAME    = localStorage.getItem('pipeline_user_name') || 'Mathew Knight';
   const LS_USER_KEY = 'pipeline_user_name';
@@ -300,8 +300,8 @@
 
   // Per-project weekly effort thresholds (hours) for crunch-point cell tinting.
   // Ticked tasks are excluded — tint reflects remaining live workload only.
-  const CRUNCH_THRESHOLD_1 = 5;   // light tint  (≥ 5 h)
-  const CRUNCH_THRESHOLD_2 = 8;   // darker tint (≥ 8 h)
+  const CRUNCH_THRESHOLD_1 = 4;   // light tint  (≥ 4 h)
+  const CRUNCH_THRESHOLD_2 = 7;   // darker tint (≥ 7 h)
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
   const MONTH_TO_NUM = {
