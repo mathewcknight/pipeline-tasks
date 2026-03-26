@@ -229,7 +229,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v8.7';
+  const VERSION = 'v8.8';
 
   let   MK_NAME    = localStorage.getItem('pipeline_user_name') || 'Mathew Knight';
   const LS_USER_KEY = 'pipeline_user_name';
@@ -1154,10 +1154,13 @@
       // Week cells
       for (const w of weeks) {
         const cellEffort = projWeekEffort.get(`${project.name}__${w.key}`) || 0;
-        const crunchCls  = cellEffort >= CRUNCH_THRESHOLD_2 ? ' tl-crunch-2'
-                         : cellEffort >= CRUNCH_THRESHOLD_1 ? ' tl-crunch-1'
+        const crunchBg   = cellEffort >= CRUNCH_THRESHOLD_2 ? '#6e4210'
+                         : cellEffort >= CRUNCH_THRESHOLD_1 ? '#523615'
                          : '';
-        html += `<td class="tl-cell${w.isCurrentWeek ? ' tl-cur-col' : ''}${crunchCls}">`;
+        const crunchCls  = crunchBg ? (cellEffort >= CRUNCH_THRESHOLD_2 ? ' tl-crunch-2' : ' tl-crunch-1') : '';
+        // Inline style ensures the orange overrides any CSS cascade (current-week blue, hover, etc.)
+        const crunchStyle = crunchBg ? ` style="background:${crunchBg}"` : '';
+        html += `<td class="tl-cell${w.isCurrentWeek ? ' tl-cur-col' : ''}${crunchCls}"${crunchStyle}>`;
 
         // Stage assessment markers — sorted by effective date
         const stagesInWeek = Object.entries(project.stageDates)
