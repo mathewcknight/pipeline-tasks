@@ -229,7 +229,7 @@
   // CONSTANTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const VERSION = 'v8.3';
+  const VERSION = 'v8.4';
 
   let   MK_NAME    = localStorage.getItem('pipeline_user_name') || 'Mathew Knight';
   const LS_USER_KEY = 'pipeline_user_name';
@@ -297,6 +297,11 @@
   // Stages that require a Forecasted Application Approver to be set on the project.
   // If approvalAuthority is blank, tasks for these stages are suppressed entirely.
   const AUTHORITY_REQUIRED_STAGES = new Set(['Prescreen', 'Funding Approval', 'Approval to Execute']);
+
+  // Per-project weekly effort thresholds (hours) for crunch-point cell tinting.
+  // Ticked tasks are excluded — tint reflects remaining live workload only.
+  const CRUNCH_THRESHOLD_1 = 5;   // light tint  (≥ 5 h)
+  const CRUNCH_THRESHOLD_2 = 8;   // darker tint (≥ 8 h)
 
   // Month name → zero-padded month number (for mapping wide-format column headers to YYYY-MM keys)
   const MONTH_TO_NUM = {
@@ -988,6 +993,39 @@
     return weeks.map(w => effortMap[w.key]);
   }
 
+  // Returns a Map keyed by "projectName__weekKey" → hours of remaining effort
+  // (unticked tasks only) for each project × week combination.
+  // Used to tint timeline cells by crunch level.
+  function computePerProjectWeeklyEffort(weeks) {
+    const weekKeySet = new Set(weeks.map(w => w.key));
+    const map = new Map();
+
+    for (const t of appState.allTasks) {
+      if (t.isConcept) continue;
+      if (appState.tickState[t.tickKey]) continue;   // exclude ticked tasks
+      const hrs    = (t.taskDef && t.taskDef.time > 0) ? t.taskDef.time : 0.25;
+      const effDue = getEffectiveDueDate(t);
+      if (!effDue) continue;
+      const proj   = t.projectName;
+
+      const addHrs = (wk, h) => {
+        if (!weekKeySet.has(wk)) return;
+        const k = `${proj}__${wk}`;
+        map.set(k, (map.get(k) || 0) + h);
+      };
+
+      const effStart = getEffectiveStartDate(t);
+      if (effStart && effStart < effDue) {
+        const days     = Math.round((effDue - effStart) / 86400000) + 1;
+        const dailyHrs = hrs / days;
+        for (let d = 0; d < days; d++) addHrs(toWeekKey(addDays(effStart, d)), dailyHrs);
+      } else {
+        addHrs(toWeekKey(effDue), hrs);
+      }
+    }
+    return map;
+  }
+
   // Builds a smooth SVG line chart for the given weekly effort values.
   // Returns an HTML string for an <svg> element.
   function buildEffortChartSVG(effortValues) {
@@ -1055,8 +1093,9 @@
     const weeks = getTimelineWeeks();
 
     // ── Effort chart row (above week headers) ─────────────────────────────────
-    const effortValues = computeWeeklyEffort(weeks);
-    const chartSVG     = buildEffortChartSVG(effortValues);
+    const effortValues    = computeWeeklyEffort(weeks);
+    const chartSVG        = buildEffortChartSVG(effortValues);
+    const projWeekEffort  = computePerProjectWeeklyEffort(weeks);
 
     let html = '<p class="section-label">Pipeline Timeline</p><div class="tl-wrap"><table class="tl-table"><thead>';
     // Chart row — label cell + single colspan cell containing the SVG
@@ -1114,7 +1153,11 @@
 
       // Week cells
       for (const w of weeks) {
-        html += `<td class="tl-cell${w.isCurrentWeek ? ' tl-cur-col' : ''}">`;
+        const cellEffort = projWeekEffort.get(`${project.name}__${w.key}`) || 0;
+        const crunchCls  = cellEffort >= CRUNCH_THRESHOLD_2 ? ' tl-crunch-2'
+                         : cellEffort >= CRUNCH_THRESHOLD_1 ? ' tl-crunch-1'
+                         : '';
+        html += `<td class="tl-cell${w.isCurrentWeek ? ' tl-cur-col' : ''}${crunchCls}">`;
 
         // Stage assessment markers — sorted by effective date
         const stagesInWeek = Object.entries(project.stageDates)
@@ -2223,11 +2266,13 @@
       const stageTasks = appState.allTasks
         .filter(t => t.projectName === projectName && t.stage === stage)
         .sort((a, b) => {
-          // Concept tasks (null dueDate) sort to the end
-          if (!a.dueDate && !b.dueDate) return 0;
-          if (!a.dueDate) return 1;
-          if (!b.dueDate) return -1;
-          return a.dueDate - b.dueDate;
+          // Sort by effective due date (respects overrides); null dates sort to the end
+          const da = getEffectiveDueDate(a);
+          const db = getEffectiveDueDate(b);
+          if (!da && !db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return da - db;
         });
 
       if (!stageTasks.length) continue;

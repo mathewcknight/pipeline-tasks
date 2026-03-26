@@ -247,6 +247,17 @@
     .tl-cell:last-child { border-right: none; }
     .tl-cell.tl-cur-col { background: #0c1c2e; }
 
+    /* Crunch-point tints — warm orange overlaid on the dark base.
+       Level 1 (≥ 5 h): subtle warmth. Level 2 (≥ 8 h): clearly busier. */
+    .tl-cell.tl-crunch-1                          { background: #1f1a14; }
+    .tl-cell.tl-crunch-2                          { background: #2a1d0e; }
+    .tl-cell.tl-cur-col.tl-crunch-1               { background: #161e2e; }
+    .tl-cell.tl-cur-col.tl-crunch-2               { background: #1e1e2a; }
+    .tl-row:hover .tl-cell.tl-crunch-1            { background: #252018; }
+    .tl-row:hover .tl-cell.tl-crunch-2            { background: #302212; }
+    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-1 { background: #1c2234; }
+    .tl-row:hover .tl-cell.tl-cur-col.tl-crunch-2 { background: #242230; }
+
     /* Stage assessment markers */
     .tl-stage-marker {
       display: flex;
