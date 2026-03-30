@@ -98,10 +98,28 @@ body {
   margin-bottom: 16px;
 }
 
+/* ── Stage status checkbox ── */
+.stage-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.stage-status input[type="checkbox"] {
+  cursor: not-allowed;
+  accent-color: #3fb950;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.stage-status.no-tasks { opacity: 0.3; }
+
 /* ── Setup form ── */
 .setup-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) 140px repeat(7, minmax(100px, 1fr));
+  grid-template-columns: minmax(180px, 2fr) 140px repeat(6, minmax(100px, 1fr));
   gap: 10px;
   align-items: end;
 }
@@ -782,12 +800,26 @@ function renderSetupPanel() {
   const setup = getSetup(state.activeId);
   const panel = document.getElementById('setup-panel');
 
-  const dateFields = DATE_STAGES.filter(s => s !== 'Funding Agreement').map(stage => `
+  const ticks   = getTicks(state.activeId);
+  const customs = getCustomTasks(state.activeId);
+
+  const dateFields = DATE_STAGES.filter(s => s !== 'Funding Agreement').map(stage => {
+    const tasks   = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    const ctasks  = customs.filter(c => c.stage === stage);
+    const allKeys = [...tasks.map(t => tickKey(t)), ...ctasks.map(c => 'custom__' + c.id)];
+    const noTasks = allKeys.length === 0;
+    const allDone = !noTasks && allKeys.every(k => !!ticks[k]);
+    return `
     <div class="field-group">
       <label>${esc(stage)}</label>
       <input type="date" id="f-date-${esc(stage.replace(/ /g, '-'))}"
         value="${esc(setup.stageDates[stage] || '')}">
-    </div>`).join('');
+      <div class="stage-status${noTasks ? ' no-tasks' : ''}">
+        <input type="checkbox" class="stage-status-cb" data-stage="${esc(stage)}" disabled${allDone ? ' checked' : ''}>
+        <span>${noTasks ? 'No tasks' : 'Complete'}</span>
+      </div>
+    </div>`;
+  }).join('');
 
   panel.innerHTML = `
   <div class="card">
@@ -1127,6 +1159,21 @@ function renderEffortChart() {
   
 }
 */
+function updateStageSetupCheckboxes() {
+  const setup   = getSetup(state.activeId);
+  const ticks   = getTicks(state.activeId);
+  const customs = getCustomTasks(state.activeId);
+  document.querySelectorAll('.stage-status-cb[data-stage]').forEach(cb => {
+    const stage   = cb.dataset.stage;
+    const tasks   = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    const ctasks  = customs.filter(c => c.stage === stage);
+    const allKeys = [...tasks.map(t => tickKey(t)), ...ctasks.map(c => 'custom__' + c.id)];
+    const noTasks = allKeys.length === 0;
+    cb.checked = !noTasks && allKeys.every(k => !!ticks[k]);
+    cb.closest('.stage-status').classList.toggle('no-tasks', noTasks);
+  });
+}
+
 // ── Full render ──────────────────────────────────────────────────────────────
 
 function renderAll() {
@@ -1267,6 +1314,7 @@ document.addEventListener('change', e => {
     }
     saveTicks(state.activeId, ticks);
     renderTaskPanels();
+    updateStageSetupCheckboxes();
     return;
   }
 
@@ -1287,9 +1335,10 @@ document.addEventListener('change', e => {
     if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
   });
 
-  // Update stage checkbox state, badges and effort chart for the affected task
+  // Update stage checkbox state, badges, setup status and effort chart
   applyStageIndeterminate();
   updateStageBadges();
+  updateStageSetupCheckboxes();
   /*renderEffortChart();*/
 });
 
