@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project Tracker</title>
+<title>Project Megatracker</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -308,10 +308,24 @@ body {
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* ── Page heading ── */
+#page-heading {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px 12px;
+  text-align: center;
+  letter-spacing: 0.12em;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+}
 </style>
 </head>
 <body>
 
+<div id="page-heading">Project Megatracker</div>
 <div id="tab-bar"></div>
 <div id="main">
   <div id="setup-panel"></div>
