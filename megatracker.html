@@ -323,7 +323,7 @@ body {
   color: var(--text);
 }
 
-/* ── Effort chart ── */
+/* ── Effort chart ── 
 .effort-chart-empty {
   color: var(--muted);
   font-size: 13px;
@@ -331,7 +331,7 @@ body {
   padding: 12px 0 4px;
 }
 .effort-svg { width: 100%; display: block; overflow: visible; }
-
+*/
 /* ── Pencil + add buttons ── */
 .task-pencil {
   background: none;
@@ -479,7 +479,7 @@ tr:hover .task-pencil { opacity: 1; }
     <br><br>This dashboard is a best practice minimum. There are many variations to this required to take any individual project through the ARENA process and you should use this as a checklist to cover all mandatory steps in time.
   </div>
   <div id="setup-panel"></div>
-  <div id="effort-chart"></div>
+  <!--<div id="effort-chart"></div>-->
   <div id="task-panels"></div>
 </div>
 
@@ -1031,7 +1031,7 @@ function applyStageIndeterminate() {
 }
 
 // ── Effort chart ─────────────────────────────────────────────────────────────
-<!--
+/*
 function renderEffortChart() {
   const el = document.getElementById('effort-chart');
   if (!el) return;
@@ -1126,7 +1126,7 @@ function renderEffortChart() {
   el.innerHTML = `<div class="card"><div class="card-title">Effort Forecast — next 22 weeks (hrs remaining)</div>${body}</div>`;
   
 }
--->
+*/
 // ── Full render ──────────────────────────────────────────────────────────────
 
 function renderAll() {
