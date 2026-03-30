@@ -323,6 +323,15 @@ body {
   color: var(--text);
 }
 
+/* ── Effort chart ── */
+.effort-chart-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0 4px;
+}
+.effort-svg { width: 100%; display: block; overflow: visible; }
+
 /* ── Pencil + add buttons ── */
 .task-pencil {
   background: none;
@@ -470,6 +479,7 @@ tr:hover .task-pencil { opacity: 1; }
     <br><br>This dashboard is a best practice minimum. There are many variations to this required to take any individual project through the ARENA process and you should use this as a checklist to cover all mandatory steps in time.
   </div>
   <div id="setup-panel"></div>
+  <div id="effort-chart"></div>
   <div id="task-panels"></div>
 </div>
 
@@ -1020,11 +1030,108 @@ function applyStageIndeterminate() {
   });
 }
 
+// ── Effort chart ─────────────────────────────────────────────────────────────
+
+function renderEffortChart() {
+  const el = document.getElementById('effort-chart');
+  if (!el) return;
+
+  const setup     = getSetup(state.activeId);
+  const ticks     = getTicks(state.activeId);
+  const overrides = getOverrides(state.activeId);
+  const customs   = getCustomTasks(state.activeId);
+
+  // Build 22 weekly buckets starting from Monday of current week
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dow   = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const NUM_WEEKS = 22;
+  const weeks = Array.from({ length: NUM_WEEKS }, (_, i) => {
+    const start = new Date(monday); start.setDate(monday.getDate() + i * 7);
+    const end   = new Date(start);  end.setDate(start.getDate() + 6);
+    return { start, end, hours: 0 };
+  });
+
+  // Sum effort of unticked tasks by effective due date week
+  for (const task of TASK_DEFINITIONS.filter(t => isTaskVisible(t, setup))) {
+    if (ticks[tickKey(task)]) continue;
+    const ov  = overrides[task.id] || {};
+    const due = ov.dueDate ? new Date(ov.dueDate + 'T00:00:00') : computeDueDate(task, setup);
+    if (!due || !task.time) continue;
+    const w = weeks.find(w => due >= w.start && due <= w.end);
+    if (w) w.hours += task.time;
+  }
+  for (const ct of customs) {
+    if (ticks['custom__' + ct.id] || !ct.dueDate || !ct.time) continue;
+    const due = new Date(ct.dueDate + 'T00:00:00');
+    const w   = weeks.find(w => due >= w.start && due <= w.end);
+    if (w) w.hours += ct.time;
+  }
+
+  const maxHours = Math.max(...weeks.map(w => w.hours), 1);
+  const hasAny   = weeks.some(w => w.hours > 0);
+
+  // SVG dimensions
+  const VW = 900, VH = 140;
+  const PAD_L = 36, PAD_R = 8, PAD_T = 8, PAD_B = 48;
+  const chartW = VW - PAD_L - PAD_R;
+  const chartH = VH - PAD_T - PAD_B;
+  const slotW  = chartW / NUM_WEEKS;
+  const barW   = Math.max(slotW - 4, 4);
+
+  // Y-axis guide lines
+  const yTicks = [0.25, 0.5, 0.75, 1].map(f => ({ h: f * maxHours, y: PAD_T + chartH * (1 - f) }));
+
+  let svgInner = '';
+
+  // Guide lines
+  for (const { h, y } of yTicks) {
+    svgInner += `<line x1="${PAD_L}" y1="${y}" x2="${VW - PAD_R}" y2="${y}" stroke="#30363d" stroke-width="1"/>`;
+    svgInner += `<text x="${PAD_L - 4}" y="${y + 4}" text-anchor="end" font-size="9" fill="#8b949e">${h % 1 === 0 ? h : h.toFixed(1)}</text>`;
+  }
+  svgInner += `<line x1="${PAD_L}" y1="${PAD_T + chartH}" x2="${VW - PAD_R}" y2="${PAD_T + chartH}" stroke="#30363d" stroke-width="1"/>`;
+
+  // Bars and labels
+  for (let i = 0; i < NUM_WEEKS; i++) {
+    const { start, hours } = weeks[i];
+    const x      = PAD_L + i * slotW + (slotW - barW) / 2;
+    const barH   = (hours / maxHours) * chartH;
+    const y      = PAD_T + chartH - barH;
+    const isCur  = i === 0;
+    const fill   = hours === 0 ? 'rgba(88,166,255,0.08)' : isCur ? '#388bfd' : '#1f6feb';
+    const labelY = PAD_T + chartH + 14;
+
+    if (barH > 0) {
+      svgInner += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="2" fill="${fill}"/>`;
+      if (barH > 14) {
+        svgInner += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y + barH - 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.7)">${hours % 1 === 0 ? hours : hours.toFixed(1)}</text>`;
+      }
+    } else {
+      svgInner += `<rect x="${x.toFixed(1)}" y="${(PAD_T + chartH - 2).toFixed(1)}" width="${barW.toFixed(1)}" height="2" rx="1" fill="rgba(88,166,255,0.15)"/>`;
+    }
+
+    // Show label every 2 weeks, or week 0
+    if (i % 2 === 0) {
+      const mon = start.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+      svgInner += `<text x="${(x + barW / 2).toFixed(1)}" y="${labelY}" text-anchor="end" font-size="9" fill="#8b949e" transform="rotate(-40 ${(x + barW / 2).toFixed(1)} ${labelY})">${esc(mon)}</text>`;
+    }
+  }
+
+  const body = hasAny
+    ? `<svg class="effort-svg" viewBox="0 0 ${VW} ${VH}">${svgInner}</svg>`
+    : `<div class="effort-chart-empty">No task due dates set — add stage dates in the setup card to see effort estimates.</div>`;
+
+  el.innerHTML = `<div class="card"><div class="card-title">Effort Forecast — next 22 weeks (hrs remaining)</div>${body}</div>`;
+}
+
 // ── Full render ──────────────────────────────────────────────────────────────
 
 function renderAll() {
   renderTabs();
   renderSetupPanel();
+  renderEffortChart();
   renderTaskPanels();
 }
 
@@ -1179,9 +1286,10 @@ document.addEventListener('change', e => {
     if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
   });
 
-  // Update stage checkbox state and badges for the affected stage
+  // Update stage checkbox state, badges and effort chart for the affected task
   applyStageIndeterminate();
   updateStageBadges();
+  renderEffortChart();
 });
 
 document.addEventListener('click', e => {
