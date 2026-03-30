@@ -299,7 +299,7 @@ body {
 }
 .full-table tr:last-child td { border-bottom: none; }
 .full-table td:first-child { width: 28px; padding-left: 4px; }
-.full-table td:last-child  { text-align: right; width: 62px; }
+.full-table td:last-child  { text-align: right; width: 82px; white-space: nowrap; }
 .full-table td:nth-child(3) { width: 110px; }
 
 /* ── Stage date in header ── */
@@ -322,6 +322,127 @@ body {
 .guidance-banner strong {
   color: var(--text);
 }
+
+/* ── Pencil + add buttons ── */
+.task-pencil {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+tr:hover .task-pencil { opacity: 1; }
+.task-pencil:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.stage-add-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+.stage-add-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  width: 440px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-box h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.modal-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.modal-row label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.modal-row input,
+.modal-row select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.modal-row input:focus,
+.modal-row select:focus { outline: none; border-color: var(--accent); }
+.modal-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.btn-modal-save {
+  background: #1f6feb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-modal-save:hover { background: #388bfd; }
+.btn-modal-cancel {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-modal-cancel:hover { color: var(--text); border-color: var(--muted); }
+.btn-modal-reset {
+  background: none;
+  color: #f85149;
+  border: 1px solid rgba(248,81,73,0.3);
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: auto;
+}
+.btn-modal-reset:hover { background: rgba(248,81,73,0.1); }
 
 /* ── Page heading ── */
 #page-heading {
@@ -346,6 +467,7 @@ body {
     <strong>How to use:</strong> Add a project tab for each active investment you're managing.
     Fill in the <strong>project name</strong>, <strong>approval authority</strong>, and any known <strong>stage dates</strong> — the tracker will calculate task due dates automatically.
     Tick tasks off as you complete them. Use the <strong>Next 2 Weeks</strong> panel to focus on what's coming up, and expand stage sections in <strong>All Tasks</strong> to see the full checklist.
+    <br><br>This dashboard is a best practice minimum. There are many variations to this required to take any individual project through the ARENA process and you should use this as a checklist to cover all mandatory steps in time.
   </div>
   <div id="setup-panel"></div>
   <div id="task-panels"></div>
@@ -574,6 +696,22 @@ function saveOpen(id, set) {
   localStorage.setItem('pt_open_' + id, JSON.stringify([...set]));
 }
 
+function getOverrides(id) {
+  try { return JSON.parse(localStorage.getItem('pt_overrides_' + id) || '{}'); } catch { return {}; }
+}
+
+function saveOverrides(id, overrides) {
+  localStorage.setItem('pt_overrides_' + id, JSON.stringify(overrides));
+}
+
+function getCustomTasks(id) {
+  try { return JSON.parse(localStorage.getItem('pt_custom_' + id) || '[]'); } catch { return []; }
+}
+
+function saveCustomTasks(id, tasks) {
+  localStorage.setItem('pt_custom_' + id, JSON.stringify(tasks));
+}
+
 // ── Business logic ────────────────────────────────────────────────────────────
 
 function isTaskVisible(task, setup) {
@@ -678,6 +816,8 @@ function dueCls(due, today) {
 function renderTaskPanels() {
   const setup     = getSetup(state.activeId);
   const ticks     = getTicks(state.activeId);
+  const overrides = getOverrides(state.activeId);
+  const customs   = getCustomTasks(state.activeId);
   const open  = getOpen(state.activeId);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const cutoff    = new Date(today); cutoff.setDate(today.getDate() + 14);
@@ -723,30 +863,53 @@ function renderTaskPanels() {
     if (!tasks.length) continue;
     anyVisible = true;
 
-    const sc      = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
-    const isOpen  = open.has(stage);
-    const done    = tasks.filter(t => !!ticks[tickKey(t)]).length;
-    const pct     = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+    const sc          = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
+    const isOpen      = open.has(stage);
+    const stageCustms = customs.filter(c => c.stage === stage);
+    const allStageTasks = [...tasks.map(t => tickKey(t)), ...stageCustms.map(c => 'custom__' + c.id)];
+    const done        = allStageTasks.filter(k => !!ticks[k]).length;
+    const total       = allStageTasks.length;
 
     let taskRows = '';
     for (const task of tasks) {
-      const key    = tickKey(task);
-      const ticked = !!ticks[key];
-      const due    = computeDueDate(task, setup);
-      const cls    = dueCls(due, today);
-      const dueTxt = due
+      const key     = tickKey(task);
+      const ticked  = !!ticks[key];
+      const ov      = overrides[task.id] || {};
+      const label   = ov.label || task.label;
+      const due     = ov.dueDate
+        ? new Date(ov.dueDate + 'T00:00:00')
+        : computeDueDate(task, setup);
+      const cls     = dueCls(due, today);
+      const dueTxt  = due
         ? due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
         : '—';
-
-      // Role badge
-      const rc = ROLE_COLORS[task.role] || ROLE_COLORS['Analyst'];
-      const roleBadge = `<span class="role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(task.role)}</span>`;
+      const role    = ov.role || task.role;
+      const rc      = ROLE_COLORS[role] || ROLE_COLORS['Analyst'];
+      const roleBadge = `<span class="role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(role)}</span>`;
 
       taskRows += `<tr class="task-row${ticked ? ' ticked' : ''}" data-key="${esc(key)}">
         <td><input type="checkbox" class="task-cb" data-key="${esc(key)}"${ticked ? ' checked' : ''}></td>
-        <td><span class="check-icon">✓</span><span class="task-label">${esc(task.label)}</span></td>
+        <td><span class="check-icon">✓</span><span class="task-label">${esc(label)}</span></td>
         <td>${roleBadge}</td>
-        <td><span class="${cls || 'due-normal'}">${esc(dueTxt)}</span></td>
+        <td><span class="${cls || 'due-normal'}">${esc(dueTxt)}</span><button class="task-pencil" data-task-id="${esc(task.id)}" title="Edit task">✏</button></td>
+      </tr>`;
+    }
+
+    // Custom tasks for this stage
+    for (const ct of customs.filter(c => c.stage === stage)) {
+      const key    = 'custom__' + ct.id;
+      const ticked = !!ticks[key];
+      const due    = ct.dueDate ? new Date(ct.dueDate + 'T00:00:00') : null;
+      const cls    = dueCls(due, today);
+      const dueTxt = due ? due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '—';
+      const rc     = ROLE_COLORS[ct.role] || ROLE_COLORS['Analyst'];
+      const roleBadge = `<span class="role-badge" style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">${esc(ct.role)}</span>`;
+
+      taskRows += `<tr class="task-row${ticked ? ' ticked' : ''}" data-key="${esc(key)}">
+        <td><input type="checkbox" class="task-cb" data-key="${esc(key)}"${ticked ? ' checked' : ''}></td>
+        <td><span class="check-icon">✓</span><span class="task-label">${esc(ct.label)}</span></td>
+        <td>${roleBadge}</td>
+        <td><span class="${cls || 'due-normal'}">${esc(dueTxt)}</span><button class="task-pencil" data-custom-id="${esc(ct.id)}" title="Edit task">✏</button></td>
       </tr>`;
     }
 
@@ -754,12 +917,20 @@ function renderTaskPanels() {
     const stageDateTxt = stageDate
       ? new Date(stageDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
       : '—';
-    const allDone  = done === tasks.length;
-    const overdue  = tasks.filter(t => {
-      if (ticks[tickKey(t)]) return false;
-      const d = computeDueDate(t, setup);
-      return d !== null && d < today;
-    }).length;
+    const allDone  = done === total;
+    const overdue  = [
+      ...tasks.filter(t => {
+        if (ticks[tickKey(t)]) return false;
+        const ov = overrides[t.id] || {};
+        const d  = ov.dueDate ? new Date(ov.dueDate + 'T00:00:00') : computeDueDate(t, setup);
+        return d !== null && d < today;
+      }),
+      ...stageCustms.filter(c => {
+        if (ticks['custom__' + c.id]) return false;
+        const d = c.dueDate ? new Date(c.dueDate + 'T00:00:00') : null;
+        return d !== null && d < today;
+      }),
+    ].length;
     const overdueBadge = overdue > 0
       ? `<span class="badge-overdue">${overdue} overdue</span>`
       : '';
@@ -772,9 +943,10 @@ function renderTaskPanels() {
         <span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(stage)}</span>
         <span class="stage-date">${esc(stageDateTxt)}</span>
         <span class="stage-badges" data-stage="${esc(stage)}">
-          <span class="badge-done${allDone ? ' all-done' : ''}">${done}/${tasks.length}</span>
+          <span class="badge-done${allDone ? ' all-done' : ''}">${done}/${total}</span>
           ${overdueBadge}
         </span>
+        <button class="stage-add-btn" data-add-stage="${esc(stage)}" title="Add custom task">+</button>
       </div>
       <div class="stage-body${isOpen ? ' open' : ''}">
         <table class="full-table"><tbody>${taskRows}</tbody></table>
@@ -792,22 +964,35 @@ function renderTaskPanels() {
 }
 
 function updateStageBadges() {
-  const setup = getSetup(state.activeId);
-  const ticks = getTicks(state.activeId);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const setup     = getSetup(state.activeId);
+  const ticks     = getTicks(state.activeId);
+  const overrides = getOverrides(state.activeId);
+  const customs   = getCustomTasks(state.activeId);
+  const today     = new Date(); today.setHours(0, 0, 0, 0);
   document.querySelectorAll('.stage-badges[data-stage]').forEach(container => {
-    const stage = container.dataset.stage;
-    const tasks = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
-    const done    = tasks.filter(t => !!ticks[tickKey(t)]).length;
-    const allDone = done === tasks.length;
-    const overdue = tasks.filter(t => {
-      if (ticks[tickKey(t)]) return false;
-      const d = computeDueDate(t, setup);
-      return d !== null && d < today;
-    }).length;
+    const stage       = container.dataset.stage;
+    const tasks       = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    const stageCustms = customs.filter(c => c.stage === stage);
+    const allKeys     = [...tasks.map(t => tickKey(t)), ...stageCustms.map(c => 'custom__' + c.id)];
+    const done        = allKeys.filter(k => !!ticks[k]).length;
+    const total       = allKeys.length;
+    const allDone     = done === total;
+    const overdue     = [
+      ...tasks.filter(t => {
+        if (ticks[tickKey(t)]) return false;
+        const ov = overrides[t.id] || {};
+        const d  = ov.dueDate ? new Date(ov.dueDate + 'T00:00:00') : computeDueDate(t, setup);
+        return d !== null && d < today;
+      }),
+      ...stageCustms.filter(c => {
+        if (ticks['custom__' + c.id]) return false;
+        const d = c.dueDate ? new Date(c.dueDate + 'T00:00:00') : null;
+        return d !== null && d < today;
+      }),
+    ].length;
     const doneBadge = container.querySelector('.badge-done');
     if (doneBadge) {
-      doneBadge.textContent = `${done}/${tasks.length}`;
+      doneBadge.textContent = `${done}/${total}`;
       doneBadge.classList.toggle('all-done', allDone);
     }
     let overdueBadgeEl = container.querySelector('.badge-overdue');
@@ -856,6 +1041,109 @@ function readSetupForm() {
   };
 }
 
+// ── Modal state ──────────────────────────────────────────────────────────────
+
+let _modalMode  = null;  // 'edit' | 'add' | 'edit-custom'
+let _modalTaskId   = null;
+let _modalCustomId = null;
+
+function openModal() {
+  document.getElementById('task-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('task-modal').classList.remove('open');
+  _modalMode = _modalTaskId = _modalCustomId = null;
+}
+
+function openEditModal(taskId) {
+  const overrides = getOverrides(state.activeId);
+  const task = TASK_DEFINITIONS.find(t => t.id === taskId);
+  if (!task) return;
+  const ov = overrides[taskId] || {};
+  _modalMode   = 'edit';
+  _modalTaskId = taskId;
+  document.getElementById('modal-title').textContent   = 'Edit Task';
+  document.getElementById('modal-label').value         = ov.label || task.label;
+  document.getElementById('modal-due').value           = ov.dueDate || '';
+  document.getElementById('modal-role').value          = ov.role || task.role;
+  document.getElementById('modal-stage-row').style.display = 'none';
+  document.getElementById('modal-btn-reset').style.display = '';
+  openModal();
+}
+
+function openEditCustomModal(customId) {
+  const customs = getCustomTasks(state.activeId);
+  const ct = customs.find(c => c.id === customId);
+  if (!ct) return;
+  _modalMode     = 'edit-custom';
+  _modalCustomId = customId;
+  document.getElementById('modal-title').textContent   = 'Edit Custom Task';
+  document.getElementById('modal-label').value         = ct.label;
+  document.getElementById('modal-due').value           = ct.dueDate || '';
+  document.getElementById('modal-role').value          = ct.role;
+  document.getElementById('modal-stage-row').style.display = 'none';
+  document.getElementById('modal-btn-reset').style.display = '';
+  openModal();
+}
+
+function openAddModal(stage) {
+  _modalMode = 'add';
+  document.getElementById('modal-title').textContent   = 'Add Custom Task';
+  document.getElementById('modal-label').value         = '';
+  document.getElementById('modal-due').value           = '';
+  document.getElementById('modal-role').value          = 'Analyst';
+  document.getElementById('modal-stage').value         = stage;
+  document.getElementById('modal-stage-row').style.display = '';
+  document.getElementById('modal-btn-reset').style.display = 'none';
+  openModal();
+}
+
+function saveModal() {
+  const label = document.getElementById('modal-label').value.trim();
+  if (!label) { document.getElementById('modal-label').focus(); return; }
+  const dueDate = document.getElementById('modal-due').value || null;
+  const role    = document.getElementById('modal-role').value;
+
+  if (_modalMode === 'edit') {
+    const overrides = getOverrides(state.activeId);
+    overrides[_modalTaskId] = { label, dueDate, role };
+    saveOverrides(state.activeId, overrides);
+
+  } else if (_modalMode === 'edit-custom') {
+    const customs = getCustomTasks(state.activeId);
+    const ct = customs.find(c => c.id === _modalCustomId);
+    if (ct) { ct.label = label; ct.dueDate = dueDate; ct.role = role; }
+    saveCustomTasks(state.activeId, customs);
+
+  } else if (_modalMode === 'add') {
+    const stage   = document.getElementById('modal-stage').value;
+    const customs = getCustomTasks(state.activeId);
+    customs.push({ id: newId(), stage, label, role, dueDate });
+    saveCustomTasks(state.activeId, customs);
+  }
+
+  closeModal();
+  renderTaskPanels();
+}
+
+function resetModal() {
+  if (_modalMode === 'edit' && _modalTaskId) {
+    const overrides = getOverrides(state.activeId);
+    delete overrides[_modalTaskId];
+    saveOverrides(state.activeId, overrides);
+  } else if (_modalMode === 'edit-custom' && _modalCustomId) {
+    const customs = getCustomTasks(state.activeId).filter(c => c.id !== _modalCustomId);
+    saveCustomTasks(state.activeId, customs);
+    // Also remove tick for this custom task
+    const ticks = getTicks(state.activeId);
+    delete ticks['custom__' + _modalCustomId];
+    saveTicks(state.activeId, ticks);
+  }
+  closeModal();
+  renderTaskPanels();
+}
+
 // ── Events ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('change', e => {
@@ -897,9 +1185,30 @@ document.addEventListener('change', e => {
 });
 
 document.addEventListener('click', e => {
+  // Modal buttons
+  if (e.target.id === 'modal-btn-save')   { saveModal();  return; }
+  if (e.target.id === 'modal-btn-cancel') { closeModal(); return; }
+  if (e.target.id === 'modal-btn-reset')  { resetModal(); return; }
+  if (e.target.id === 'task-modal')       { closeModal(); return; }  // backdrop click
+
+  // Pencil button on task row
+  if (e.target.matches('.task-pencil')) {
+    e.stopPropagation();
+    if (e.target.dataset.taskId)   openEditModal(e.target.dataset.taskId);
+    if (e.target.dataset.customId) openEditCustomModal(e.target.dataset.customId);
+    return;
+  }
+
+  // + button on stage header
+  if (e.target.matches('.stage-add-btn')) {
+    e.stopPropagation();
+    openAddModal(e.target.dataset.addStage);
+    return;
+  }
+
   // Toggle stage section (ignore clicks on the stage checkbox itself)
   const hdr = e.target.closest('.stage-header');
-  if (hdr && !e.target.matches('.stage-cb')) {
+  if (hdr && !e.target.matches('.stage-cb') && !e.target.matches('.stage-add-btn')) {
     const stage  = hdr.dataset.stage;
     const open   = getOpen(state.activeId);
     const body   = hdr.nextElementSibling;
@@ -968,8 +1277,45 @@ document.addEventListener('click', e => {
   }
 });
 
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderAll();
 </script>
+
+<div class="modal-overlay" id="task-modal">
+  <div class="modal-box">
+    <h3 id="modal-title">Edit Task</h3>
+    <div class="modal-row">
+      <label for="modal-label">Task label</label>
+      <input type="text" id="modal-label" placeholder="Task description">
+    </div>
+    <div class="modal-row">
+      <label for="modal-due">Due date override <span class="modal-hint">(leave blank to use calculated date)</span></label>
+      <input type="date" id="modal-due">
+    </div>
+    <div class="modal-row" id="modal-role-row">
+      <label for="modal-role">Role</label>
+      <select id="modal-role">
+        <option value="Analyst">Analyst</option>
+        <option value="Manager">Manager</option>
+        <option value="Analyst Assisting">Analyst Assisting</option>
+      </select>
+    </div>
+    <div class="modal-row" id="modal-stage-row">
+      <label for="modal-stage">Stage</label>
+      <select id="modal-stage">
+        ${DATE_STAGES.map(s => `<option value="${s}">${s}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-reset" id="modal-btn-reset" style="display:none">Reset to default</button>
+      <button class="btn-modal-cancel" id="modal-btn-cancel">Cancel</button>
+      <button class="btn-modal-save" id="modal-btn-save">Save</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
