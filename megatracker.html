@@ -100,7 +100,7 @@ body {
 
 /* ── Stage progress flow ── */
 .stage-progress-row {
-  grid-column: 3 / -1;
+  grid-column: 1 / -1;
   display: flex;
   align-items: flex-start;
   padding-top: 8px;
@@ -852,7 +852,7 @@ function renderSetupPanel() {
   const ticks   = getTicks(state.activeId);
   const customs = getCustomTasks(state.activeId);
 
-  const progressStages = DATE_STAGES.filter(s => s !== 'Funding Agreement');
+  const progressStages = DATE_STAGES;
   const dateFields = progressStages.filter(s => s !== 'Concept').map(stage => {
     return `
     <div class="field-group">
@@ -1132,13 +1132,13 @@ function renderEffortChart() {
   const overrides = getOverrides(state.activeId);
   const customs   = getCustomTasks(state.activeId);
 
-  // Weekly buckets: Monday of current week → +22 weeks
+  // Weekly buckets: Monday of current week → +12 weeks
   const today  = new Date(); today.setHours(0, 0, 0, 0);
   const dow    = today.getDay();
   const monday = new Date(today);
   monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
 
-  const NUM_WEEKS = 22;
+  const NUM_WEEKS = 12;
   const weeks = Array.from({ length: NUM_WEEKS }, (_, i) => {
     const start = new Date(monday); start.setDate(monday.getDate() + i * 7);
     const end   = new Date(start);  end.setDate(start.getDate() + 6);
@@ -1229,7 +1229,7 @@ function renderEffortChart() {
     <path d="${areaPath}" fill="url(#effortGrad)"/>
     <path d="${linePath}" fill="none" stroke="#388bfd" stroke-width="2" stroke-linejoin="round"/>`;
 
-  el.innerHTML = `<div class="card"><div class="card-title">Effort Forecast — next 22 weeks</div><svg class="effort-svg" viewBox="0 0 ${VW} ${VH}">${svgInner}</svg></div>`;
+  el.innerHTML = `<div class="card"><div class="card-title">Effort Forecast — next 12 weeks</div><svg class="effort-svg" viewBox="0 0 ${VW} ${VH}">${svgInner}</svg></div>`;
 }
 function updateStageSetupCheckboxes() {
   const setup   = getSetup(state.activeId);
