@@ -853,7 +853,7 @@ function renderSetupPanel() {
   const customs = getCustomTasks(state.activeId);
 
   const progressStages = DATE_STAGES;
-  const dateFields = progressStages.filter(s => s !== 'Concept').map(stage => {
+  const dateFields = progressStages.filter(s => s !== 'Concept' && s !== 'Funding Agreement').map(stage => {
     return `
     <div class="field-group">
       <label>${esc(stage)}</label>
@@ -1204,7 +1204,8 @@ function renderEffortChart() {
   const linePath = crPath(pts);
   const areaPath = `${linePath} L ${pts[pts.length-1].x.toFixed(2)} ${baseY} L ${pts[0].x.toFixed(2)} ${baseY} Z`;
 
-  // Month boundary labels
+  // Gridlines + month labels
+  let weekLines = '';
   let monthLabels = '';
   let prevMonth = -1;
   for (const { x, start } of pts) {
@@ -1214,6 +1215,8 @@ function renderEffortChart() {
       monthLabels += `<text x="${x.toFixed(2)}" y="${VH - 4}" text-anchor="middle" font-size="10" fill="#8b949e">${esc(label)}</text>`;
       monthLabels += `<line x1="${x.toFixed(2)}" y1="${PAD_T}" x2="${x.toFixed(2)}" y2="${baseY}" stroke="#30363d" stroke-width="1" stroke-dasharray="3,3"/>`;
       prevMonth = m;
+    } else {
+      weekLines += `<line x1="${x.toFixed(2)}" y1="${PAD_T}" x2="${x.toFixed(2)}" y2="${baseY}" stroke="#21262d" stroke-width="1"/>`;
     }
   }
 
@@ -1225,6 +1228,7 @@ function renderEffortChart() {
       </linearGradient>
     </defs>
     <line x1="${PAD_L}" y1="${baseY}" x2="${VW - PAD_R}" y2="${baseY}" stroke="#30363d" stroke-width="1"/>
+    ${weekLines}
     ${monthLabels}
     <path d="${areaPath}" fill="url(#effortGrad)"/>
     <path d="${linePath}" fill="none" stroke="#388bfd" stroke-width="2" stroke-linejoin="round"/>`;
