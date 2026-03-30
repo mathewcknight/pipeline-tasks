@@ -151,7 +151,7 @@ body {
 /* ── Setup form ── */
 .setup-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) 140px repeat(6, minmax(100px, 1fr));
+  grid-template-columns: minmax(180px, 2fr) 140px repeat(5, minmax(100px, 1fr));
   gap: 10px;
   align-items: end;
 }
@@ -853,7 +853,7 @@ function renderSetupPanel() {
   const customs = getCustomTasks(state.activeId);
 
   const progressStages = DATE_STAGES.filter(s => s !== 'Funding Agreement');
-  const dateFields = progressStages.map(stage => {
+  const dateFields = progressStages.filter(s => s !== 'Concept').map(stage => {
     return `
     <div class="field-group">
       <label>${esc(stage)}</label>
