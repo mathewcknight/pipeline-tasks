@@ -309,6 +309,20 @@ body {
   white-space: nowrap;
 }
 
+/* ── Guidance banner ── */
+.guidance-banner {
+  background: rgba(88,166,255,0.07);
+  border: 1px solid rgba(88,166,255,0.2);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.guidance-banner strong {
+  color: var(--text);
+}
+
 /* ── Page heading ── */
 #page-heading {
   background: var(--surface);
@@ -328,6 +342,11 @@ body {
 <div id="page-heading">Project Megatracker</div>
 <div id="tab-bar"></div>
 <div id="main">
+  <div class="guidance-banner">
+    <strong>How to use:</strong> Add a project tab for each active investment you're managing.
+    Fill in the <strong>project name</strong>, <strong>approval authority</strong>, and any known <strong>stage dates</strong> — the tracker will calculate task due dates automatically.
+    Tick tasks off as you complete them. Use the <strong>Next 2 Weeks</strong> panel to focus on what's coming up, and expand stage sections in <strong>All Tasks</strong> to see the full checklist.
+  </div>
   <div id="setup-panel"></div>
   <div id="task-panels"></div>
 </div>
