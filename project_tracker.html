@@ -509,12 +509,12 @@ function saveTicks(id, ticks) {
   localStorage.setItem('pt_ticks_' + id, JSON.stringify(ticks));
 }
 
-function getCollapsed(id) {
-  try { return new Set(JSON.parse(localStorage.getItem('pt_collapse_' + id) || '[]')); } catch { return new Set(); }
+function getOpen(id) {
+  try { return new Set(JSON.parse(localStorage.getItem('pt_open_' + id) || '[]')); } catch { return new Set(); }
 }
 
-function saveCollapsed(id, set) {
-  localStorage.setItem('pt_collapse_' + id, JSON.stringify([...set]));
+function saveOpen(id, set) {
+  localStorage.setItem('pt_open_' + id, JSON.stringify([...set]));
 }
 
 // ── Business logic ────────────────────────────────────────────────────────────
@@ -621,8 +621,8 @@ function dueCls(due, today) {
 function renderTaskPanels() {
   const setup     = getSetup(state.activeId);
   const ticks     = getTicks(state.activeId);
-  const collapsed = getCollapsed(state.activeId);
-  const today     = new Date(); today.setHours(0, 0, 0, 0);
+  const open  = getOpen(state.activeId);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const cutoff    = new Date(today); cutoff.setDate(today.getDate() + 14);
 
   // ── Summary panel (next 14 days) ──
@@ -667,7 +667,7 @@ function renderTaskPanels() {
     anyVisible = true;
 
     const sc      = STAGE_COLORS[stage] || STAGE_COLORS['Concept'];
-    const isOpen  = !collapsed.has(stage);
+    const isOpen  = open.has(stage);
     const done    = tasks.filter(t => !!ticks[tickKey(t)]).length;
     const pct     = tasks.length ? Math.round(done / tasks.length * 100) : 0;
 
@@ -798,15 +798,15 @@ document.addEventListener('click', e => {
   // Toggle stage section (ignore clicks on the stage checkbox itself)
   const hdr = e.target.closest('.stage-header');
   if (hdr && !e.target.matches('.stage-cb')) {
-    const stage     = hdr.dataset.stage;
-    const collapsed = getCollapsed(state.activeId);
-    const body      = hdr.nextElementSibling;
-    const icon      = hdr.querySelector('.stage-toggle');
-    const isOpen    = body.classList.contains('open');
+    const stage  = hdr.dataset.stage;
+    const open   = getOpen(state.activeId);
+    const body   = hdr.nextElementSibling;
+    const icon   = hdr.querySelector('.stage-toggle');
+    const isOpen = body.classList.contains('open');
     body.classList.toggle('open', !isOpen);
     icon.classList.toggle('open', !isOpen);
-    if (isOpen) collapsed.add(stage); else collapsed.delete(stage);
-    saveCollapsed(state.activeId, collapsed);
+    if (isOpen) open.delete(stage); else open.add(stage);
+    saveOpen(state.activeId, open);
     return;
   }
 
