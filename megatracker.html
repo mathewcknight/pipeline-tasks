@@ -98,23 +98,55 @@ body {
   margin-bottom: 16px;
 }
 
-/* ── Stage status checkbox ── */
-.stage-status {
+/* ── Stage progress flow ── */
+.stage-progress-row {
+  grid-column: 3 / -1;
   display: flex;
+  align-items: flex-start;
+  padding-top: 8px;
+}
+.spr-node {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 5px;
-  margin-top: 4px;
+  flex: 1;
+}
+.spr-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
+  color: transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+.spr-node.spr-done .spr-dot {
+  border-color: #3fb950;
+  background: #3fb950;
+  color: #fff;
+}
+.spr-label {
+  font-size: 9px;
   color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
 }
-.stage-status input[type="checkbox"] {
-  cursor: not-allowed;
-  accent-color: #3fb950;
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
+.spr-node.spr-done .spr-label { color: #3fb950; }
+.spr-node.spr-empty { opacity: 0.3; }
+.spr-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin-top: 9px;
+  min-width: 8px;
+  transition: background 0.2s;
 }
-.stage-status.no-tasks { opacity: 0.3; }
+.spr-connector.spr-line-done { background: #3fb950; }
 
 /* ── Setup form ── */
 .setup-grid {
@@ -497,7 +529,7 @@ tr:hover .task-pencil { opacity: 1; }
     <br><br>This dashboard is a best practice minimum. There are many variations to this required to take any individual project through the ARENA process and you should use this as a checklist to cover all mandatory steps in time.
   </div>
   <div id="setup-panel"></div>
-  <!--<div id="effort-chart"></div>-->
+  <div id="effort-chart"></div>
   <div id="task-panels"></div>
 </div>
 
@@ -820,22 +852,31 @@ function renderSetupPanel() {
   const ticks   = getTicks(state.activeId);
   const customs = getCustomTasks(state.activeId);
 
-  const dateFields = DATE_STAGES.filter(s => s !== 'Funding Agreement').map(stage => {
-    const tasks   = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
-    const ctasks  = customs.filter(c => c.stage === stage);
-    const allKeys = [...tasks.map(t => tickKey(t)), ...ctasks.map(c => 'custom__' + c.id)];
-    const noTasks = allKeys.length === 0;
-    const allDone = !noTasks && allKeys.every(k => !!ticks[k]);
+  const progressStages = DATE_STAGES.filter(s => s !== 'Funding Agreement');
+  const dateFields = progressStages.map(stage => {
     return `
     <div class="field-group">
       <label>${esc(stage)}</label>
       <input type="date" id="f-date-${esc(stage.replace(/ /g, '-'))}"
         value="${esc(setup.stageDates[stage] || '')}">
-      <div class="stage-status${noTasks ? ' no-tasks' : ''}">
-        <input type="checkbox" class="stage-status-cb" data-stage="${esc(stage)}" disabled${allDone ? ' checked' : ''}>
-        <span>${noTasks ? 'No tasks' : 'Complete'}</span>
-      </div>
     </div>`;
+  }).join('');
+
+  const progressItems = progressStages.map((stage, i) => {
+    const tasks   = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    const ctasks  = customs.filter(c => c.stage === stage);
+    const allKeys = [...tasks.map(t => tickKey(t)), ...ctasks.map(c => 'custom__' + c.id)];
+    const noTasks = allKeys.length === 0;
+    const allDone = !noTasks && allKeys.every(k => !!ticks[k]);
+    const nodeCls = (allDone ? 'spr-done ' : '') + (noTasks ? 'spr-empty' : '');
+    const connector = i < progressStages.length - 1
+      ? `<div class="spr-connector${allDone ? ' spr-line-done' : ''}"></div>`
+      : '';
+    return `<div class="spr-node ${nodeCls}" data-stage="${esc(stage)}">
+        <input type="checkbox" class="stage-status-cb" data-stage="${esc(stage)}" disabled${allDone ? ' checked' : ''} style="display:none">
+        <div class="spr-dot">✓</div>
+        <span class="spr-label">${esc(stage)}</span>
+      </div>${connector}`;
   }).join('');
 
   panel.innerHTML = `
@@ -855,6 +896,7 @@ function renderSetupPanel() {
         </select>
       </div>
       ${dateFields}
+      <div class="stage-progress-row">${progressItems}</div>
     </div>
     <div style="margin-top:12px">
       <button class="btn-save" id="btn-save">Save</button>
@@ -1199,8 +1241,16 @@ function updateStageSetupCheckboxes() {
     const ctasks  = customs.filter(c => c.stage === stage);
     const allKeys = [...tasks.map(t => tickKey(t)), ...ctasks.map(c => 'custom__' + c.id)];
     const noTasks = allKeys.length === 0;
-    cb.checked = !noTasks && allKeys.every(k => !!ticks[k]);
-    cb.closest('.stage-status').classList.toggle('no-tasks', noTasks);
+    cb.checked    = !noTasks && allKeys.every(k => !!ticks[k]);
+    const node = cb.closest('.spr-node');
+    if (node) {
+      node.classList.toggle('spr-done',  cb.checked);
+      node.classList.toggle('spr-empty', noTasks);
+      const next = node.nextElementSibling;
+      if (next && next.classList.contains('spr-connector')) {
+        next.classList.toggle('spr-line-done', cb.checked);
+      }
+    }
   });
 }
 
@@ -1278,7 +1328,9 @@ function openAddModal(stage) {
   document.getElementById('modal-label').value         = '';
   document.getElementById('modal-due').value           = '';
   document.getElementById('modal-role').value          = 'Analyst';
-  document.getElementById('modal-stage').value         = stage;
+  const stageSelect = document.getElementById('modal-stage');
+  stageSelect.innerHTML = DATE_STAGES.map(s => `<option value="${s}">${s}</option>`).join('');
+  stageSelect.value = stage;
   document.getElementById('modal-stage-row').style.display = '';
   document.getElementById('modal-btn-reset').style.display = 'none';
   openModal();
@@ -1496,9 +1548,7 @@ renderAll();
     </div>
     <div class="modal-row" id="modal-stage-row">
       <label for="modal-stage">Stage</label>
-      <select id="modal-stage">
-        ${DATE_STAGES.map(s => `<option value="${s}">${s}</option>`).join('')}
-      </select>
+      <select id="modal-stage"></select>
     </div>
     <div class="modal-footer">
       <button class="btn-modal-reset" id="modal-btn-reset" style="display:none">Reset to default</button>
