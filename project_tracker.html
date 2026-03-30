@@ -241,10 +241,34 @@ body {
   transition: transform 0.15s;
 }
 .stage-toggle.open { transform: rotate(90deg); }
-.stage-counter {
+.stage-badges {
   margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.badge-done {
   font-size: 11px;
-  color: var(--muted);
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(63,185,80,0.15);
+  color: #3fb950;
+  border: 1px solid rgba(63,185,80,0.3);
+  white-space: nowrap;
+}
+.badge-done.all-done {
+  background: rgba(63,185,80,0.3);
+}
+.badge-overdue {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(248,81,73,0.15);
+  color: #f85149;
+  border: 1px solid rgba(248,81,73,0.3);
   white-space: nowrap;
 }
 .stage-progress {
@@ -697,8 +721,15 @@ function renderTaskPanels() {
     const stageDateTxt = stageDate
       ? new Date(stageDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
       : '—';
-    const allDone = done === tasks.length;
-    const someDone = done > 0 && !allDone;
+    const allDone  = done === tasks.length;
+    const overdue  = tasks.filter(t => {
+      if (ticks[tickKey(t)]) return false;
+      const d = computeDueDate(t, setup);
+      return d !== null && d < today;
+    }).length;
+    const overdueBadge = overdue > 0
+      ? `<span class="badge-overdue">${overdue} overdue</span>`
+      : '';
 
     stageGroupsHtml += `
     <div class="stage-group">
@@ -707,7 +738,10 @@ function renderTaskPanels() {
         <span class="stage-toggle${isOpen ? ' open' : ''}">▶</span>
         <span class="chip" style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">${esc(stage)}</span>
         <span class="stage-date">${esc(stageDateTxt)}</span>
-        <span class="stage-counter">${done}/${tasks.length}</span>
+        <span class="stage-badges" data-stage="${esc(stage)}">
+          <span class="badge-done${allDone ? ' all-done' : ''}">${done}/${tasks.length}</span>
+          ${overdueBadge}
+        </span>
       </div>
       <div class="stage-body${isOpen ? ' open' : ''}">
         <table class="full-table"><tbody>${taskRows}</tbody></table>
@@ -721,6 +755,40 @@ function renderTaskPanels() {
 
   document.getElementById('task-panels').innerHTML = summaryCard + fullListCard;
   applyStageIndeterminate();
+  updateStageBadges();
+}
+
+function updateStageBadges() {
+  const setup = getSetup(state.activeId);
+  const ticks = getTicks(state.activeId);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  document.querySelectorAll('.stage-badges[data-stage]').forEach(container => {
+    const stage = container.dataset.stage;
+    const tasks = TASK_DEFINITIONS.filter(t => t.stage === stage && isTaskVisible(t, setup));
+    const done    = tasks.filter(t => !!ticks[tickKey(t)]).length;
+    const allDone = done === tasks.length;
+    const overdue = tasks.filter(t => {
+      if (ticks[tickKey(t)]) return false;
+      const d = computeDueDate(t, setup);
+      return d !== null && d < today;
+    }).length;
+    const doneBadge = container.querySelector('.badge-done');
+    if (doneBadge) {
+      doneBadge.textContent = `${done}/${tasks.length}`;
+      doneBadge.classList.toggle('all-done', allDone);
+    }
+    let overdueBadgeEl = container.querySelector('.badge-overdue');
+    if (overdue > 0) {
+      if (!overdueBadgeEl) {
+        overdueBadgeEl = document.createElement('span');
+        overdueBadgeEl.className = 'badge-overdue';
+        container.appendChild(overdueBadgeEl);
+      }
+      overdueBadgeEl.textContent = `${overdue} overdue`;
+    } else if (overdueBadgeEl) {
+      overdueBadgeEl.remove();
+    }
+  });
 }
 
 function applyStageIndeterminate() {
@@ -790,8 +858,9 @@ document.addEventListener('change', e => {
     if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
   });
 
-  // Update stage checkbox state for the affected stage
+  // Update stage checkbox state and badges for the affected stage
   applyStageIndeterminate();
+  updateStageBadges();
 });
 
 document.addEventListener('click', e => {
