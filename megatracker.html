@@ -782,7 +782,7 @@ function renderSetupPanel() {
   const setup = getSetup(state.activeId);
   const panel = document.getElementById('setup-panel');
 
-  const dateFields = DATE_STAGES.map(stage => `
+  const dateFields = DATE_STAGES.filter(s => s !== 'Funding Agreement').map(stage => `
     <div class="field-group">
       <label>${esc(stage)}</label>
       <input type="date" id="f-date-${esc(stage.replace(/ /g, '-'))}"
