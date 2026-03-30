@@ -527,13 +527,22 @@ const ROLE_COLORS = {
 };
 
 // ── Task definitions ──────────────────────────────────────────────────────────
+// T(id, label, stage, offset, dir, dur, time, auth=null, role='A')
+// role: 'A'=Analyst  'M'=Manager  'AA'=Analyst Assisting
+const ROLES = { A: 'Analyst', M: 'Manager', AA: 'Analyst Assisting' };
+function T(id, label, stage, offset, dir, dur, time, auth = null, role = 'A') {
+  return { id, label, role: ROLES[role] || role, stage,
+    days_offset: offset, offset_direction: dir, duration_days: dur,
+    time, approval_authority: auth };
+}
 
 const TASK_DEFINITIONS = [
-  { id: 'concept_deck',          label: 'Get concept deck',                                               role: 'Analyst', stage: 'Concept',             days_offset: null, offset_direction: null,     duration_days: null, time: 0.25, approval_authority: null },
-  { id: 'concept_kickoff',       label: 'Set up kick off call',                                           role: 'Analyst', stage: 'Concept',             days_offset: null, offset_direction: null,     duration_days: null, time: 0.25, approval_authority: null },
-  { id: 'concept_GMS',           label: 'Create GMS entry and put deck in folder',                        role: 'Analyst', stage: 'Concept',             days_offset: null, offset_direction: null,     duration_days: null, time: 0.25, approval_authority: null },
-  { id: 'concept_shark',         label: 'Pitch to Shark Tank',                                            role: 'Analyst', stage: 'Concept',             days_offset: null, offset_direction: null,     duration_days: null, time: 0.5,  approval_authority: null },
-  { id: 'concept_guidance',      label: 'Send application/timing guidance',                               role: 'Analyst', stage: 'Concept',             days_offset: null, offset_direction: null,     duration_days: null, time: 0.25, approval_authority: null },
+  // ── Concept ──────────────────────────────────────────────────────────────────
+  T('concept_deck',        'Get concept deck',                             'Concept', null, null, null, 0.25),
+  T('concept_kickoff',     'Set up kick off call',                         'Concept', null, null, null, 0.25),
+  T('concept_GMS',         'Create GMS entry and put deck in folder',      'Concept', null, null, null, 0.25),
+  T('concept_shark',       'Pitch to Shark Tank',                          'Concept', null, null, null, 0.5 ),
+  T('concept_guidance',    'Send application/timing guidance',             'Concept', null, null, null, 0.25),
   { id: 'eoi_feedback60',        label: 'Send main feedback on 60% draft',                                role: 'Analyst', stage: 'EOI Panel',           days_offset: 34,   offset_direction: 'before', duration_days: null, time: 0.5,  approval_authority: null },
   { id: 'eoi_gmsapp',            label: 'Ensure applicant account associated in GMS, open an app',        role: 'Analyst', stage: 'EOI Panel',           days_offset: 34,   offset_direction: 'before', duration_days: null, time: 0.25, approval_authority: null },
   { id: 'eoi_feedback95',        label: 'Send final feedback on 95% draft',                               role: 'Analyst', stage: 'EOI Panel',           days_offset: 26,   offset_direction: 'before', duration_days: null, time: 0.5,  approval_authority: null },
