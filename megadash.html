@@ -1552,7 +1552,7 @@
         );
       }
 
-      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS), 'Funding Agreement'];
+      const ORDERED_STAGES = ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Funding Agreement', 'Approval to Execute'];
       const projAuth = (project.approvalAuthority || '').trim().toUpperCase();
       for (const stage of ORDERED_STAGES) {
         if (!stagesToGen.has(stage)) continue;
@@ -2270,8 +2270,8 @@
   // Render the grouped task list for one project.
   function renderChecklistTasks(projectName) {
     const container  = document.getElementById('checklistTasks');
-    // 'Concept' first (dateless tasks), then assessment stages in pipeline order, then dateless 'Funding Agreement'.
-    const stageOrder = ['Concept', ...Object.keys(STAGE_COLUMNS), 'Funding Agreement'];
+    // 'Concept' first (dateless tasks), then assessment stages in pipeline order.
+    const stageOrder = ['Concept', 'EOI Panel', 'Prescreen', 'Full App Panel', 'Funding Approval', 'Funding Agreement', 'Approval to Execute'];
     let html = '<div class="cl-tasks-wrap">';
     let hasAny = false;
 
