@@ -392,6 +392,15 @@
     _dt('fund_approval_docs',   'Funding Approval Documentation',  'Analyst',            'Funding Approval',    21),
     _dt('fund_committee_prep',  'Approval Committee Prep',         'Manager',            'Funding Approval',    14),
     _dt('fund_applicant_comms', 'Applicant Communications',        'Analyst Assisting',  'Funding Approval',     7),
+    // ── Funding Agreement ────────────────────────────────────────────────────
+    _dt('FAneg_prep',          'Ensure deal team is all allocated, and establish group chat',                              'Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_kickoffbook',   'Book internal and external kickoffs, 1-2 days apart',                                     'Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_kickoffprep',   'Plan with M the complex items to discuss in kickoffs (milestone structure, any t+cs etc.)','Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_template',      'Prep funding agreement template, fill out all easy info, tag M for early guidance',       'Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_draft',         'Draft in all funding agreement content and tag deal team',                                 'Analyst', 'Funding Agreement', 0, 'before', 3),
+    _dt('FAneg_conditions',    'Review approval conditions have been or are being addressed',                              'Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_legalturn',     'Send to Legal to review first turn (or waive their right)',                                'Analyst', 'Funding Agreement', 0),
+    _dt('FAneg_sendfirstturn', 'Send first turn to applicant',                                                             'Analyst', 'Funding Agreement', 0),
     // ── Approval to Execute ──────────────────────────────────────────────────
     _dt('ate_agreement_review', 'Execution Agreement Review',      'Analyst',            'Approval to Execute', 21),
     _dt('ate_kickoff_prep',     'Project Kickoff Preparation',     'Analyst Assisting',  'Approval to Execute', 14),
@@ -1542,7 +1551,7 @@
         );
       }
 
-      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS)];
+      const ORDERED_STAGES = ['Concept', ...Object.keys(STAGE_COLUMNS), 'Funding Agreement'];
       const projAuth = (project.approvalAuthority || '').trim().toUpperCase();
       for (const stage of ORDERED_STAGES) {
         if (!stagesToGen.has(stage)) continue;
@@ -1565,7 +1574,7 @@
           continue;
         }
 
-        if (stage === 'Concept') {
+        if (stage === 'Concept' || stage === 'Funding Agreement') {
           for (const td of stageTasks) {
             allTasks.push({
               projectName:     project.name,
