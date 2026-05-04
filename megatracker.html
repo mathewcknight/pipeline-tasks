@@ -382,6 +382,12 @@ body {
 }
 .effort-svg { width: 100%; display: block; overflow: visible; }
 */
+/* ── Summary scroll container ── */
+.summary-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 /* ── Pencil + add buttons ── */
 .task-pencil {
   background: none;
@@ -934,7 +940,7 @@ function renderTaskPanels() {
   const upcoming = TASK_DEFINITIONS
     .filter(t => isTaskVisible(t, setup))
     .map(t => ({ task: t, due: computeDueDate(t, setup) }))
-    .filter(({ due }) => due !== null && due <= cutoff)
+    .filter(({ task, due }) => due !== null && due <= cutoff && !ticks[tickKey(task)])
     .sort((a, b) => a.due - b.due);
 
   let summaryRows = '';
@@ -955,10 +961,10 @@ function renderTaskPanels() {
 
   const summaryCard = `<div class="card"><div class="card-title">Next 2 Weeks</div>
     ${upcoming.length
-      ? `<table class="summary-table">
+      ? `<div class="summary-scroll"><table class="summary-table">
            <thead><tr><th></th><th>Task</th><th>Stage</th><th>Due</th></tr></thead>
            <tbody>${summaryRows}</tbody>
-         </table>`
+         </table></div>`
       : `<div class="summary-empty">No tasks due in the next 14 days</div>`}
   </div>`;
 
@@ -1421,17 +1427,8 @@ document.addEventListener('change', e => {
   else delete ticks[key];
   saveTicks(state.activeId, ticks);
 
-  // Sync all checkboxes and rows sharing this key (summary ↔ full list)
-  document.querySelectorAll('.task-cb').forEach(cb => {
-    if (cb.dataset.key === key) cb.checked = e.target.checked;
-  });
-  document.querySelectorAll('.task-row').forEach(row => {
-    if (row.dataset.key === key) row.classList.toggle('ticked', e.target.checked);
-  });
-
-  // Update stage checkbox state, badges, setup status and effort chart
-  applyStageIndeterminate();
-  updateStageBadges();
+  // Re-render task panels (removes ticked items from Next 2 Weeks, syncs full list)
+  renderTaskPanels();
   updateStageSetupCheckboxes();
   renderEffortChart();
 });
