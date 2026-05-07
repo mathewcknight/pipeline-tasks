@@ -992,3 +992,44 @@
       border-bottom: 1px solid #21262d;
       transition: background .1s;
     }
+
+    /* ══ Pipeline Calendar ════════════════════════════════════════════════════ */
+    #calendar { margin-top: 28px; }
+    .cal-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+    .cal-table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+      background: #161b22;
+      table-layout: fixed;
+    }
+    .cal-th-month {
+      padding: 8px 10px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #21262d;
+    }
+    .cal-th-month:last-child { border-right: none; }
+    .cal-th-month.cal-cur { color: #58a6ff; background: #0d1f36; border-bottom: 2px solid #1f6feb; }
+    .cal-row { border-bottom: 1px solid #21262d; }
+    .cal-row:last-child { border-bottom: none; }
+    .cal-row:hover .tl-label,
+    .cal-row:hover .cal-cell        { background: #1c2128; }
+    .cal-row:hover .cal-cell.cal-cur-col { background: #102030; }
+    .cal-cell {
+      padding: 6px 8px;
+      background: #161b22;
+      vertical-align: top;
+      border-right: 1px solid #21262d;
+    }
+    .cal-cell:last-child { border-right: none; }
+    .cal-cell.cal-cur-col { background: #0c1c2e; }

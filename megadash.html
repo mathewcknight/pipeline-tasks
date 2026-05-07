@@ -151,6 +151,9 @@
     <div id="nwwList" class="cl-empty">Select a person above to see their tasks for the next 7 days.</div>
   </div>
 
+  <!-- Pipeline Calendar (hidden until data loads) -->
+  <div id="calendar" style="display:none"></div>
+
   <!-- Debug panel (collapsed by default) -->
   <div id="debugToggle" class="debug-toggle" role="button" aria-expanded="false" tabindex="0">
     <span class="debug-chevron" id="debugChevron">&#9658;</span>
@@ -1278,6 +1281,96 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PIPELINE CALENDAR
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderCalendar() {
+    const container = document.getElementById('calendar');
+    if (!appState.projects.length) { container.style.display = 'none'; return; }
+
+    // Current month + 4 ahead = 5 columns
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const months = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      months.push({
+        year:  d.getFullYear(),
+        month: d.getMonth(),
+        label: d.toLocaleString('en-AU', { month: 'long', year: 'numeric' }),
+      });
+    }
+
+    let html = '<p class="section-label">Pipeline Calendar</p><div class="cal-wrap"><table class="cal-table"><thead><tr>';
+    html += '<th class="tl-th-label">Project</th>';
+    for (const m of months) {
+      const isCur = m.year === today.getFullYear() && m.month === today.getMonth();
+      html += `<th class="cal-th-month${isCur ? ' cal-cur' : ''}">${esc(m.label)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const project of getSortedProjects()) {
+      const rc     = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
+      const teamBg = IMPACT_TEAM_BG[(project.impactTeam || '').trim()];
+
+      html += '<tr class="cal-row">';
+
+      // Sticky label cell — same structure as the timeline
+      html += `<td class="tl-label"${teamBg ? ` style="background:${teamBg}"` : ''}>
+        <div class="tl-label-inner">
+          <span class="tl-project-name">${esc(project.name)}</span>
+          <div class="tl-chips-row">
+            <span class="tl-role-badge"
+              style="background:${rc.bg};color:${rc.text};border-color:${rc.border}">
+              ${esc(project.role)}
+            </span>
+          </div>
+        </div>
+      </td>`;
+
+      for (const m of months) {
+        const isCur = m.year === today.getFullYear() && m.month === today.getMonth();
+        html += `<td class="cal-cell${isCur ? ' cal-cur-col' : ''}">`;
+
+        // Stages whose effective date lands in this month (Prescreen: Board only)
+        const stagesInMonth = Object.entries(project.stageDates)
+          .filter(([stage, sd]) => {
+            if (!sd || !sd.actual) return false;
+            if (stage === 'Prescreen' && project.approvalAuthority !== 'Board') return false;
+            const eff = getEffectiveStageActual(project.name, stage, sd.actual);
+            return eff.getFullYear() === m.year && eff.getMonth() === m.month;
+          })
+          .sort(([stA, sdA], [stB, sdB]) => {
+            const a = getEffectiveStageActual(project.name, stA, sdA.actual);
+            const b = getEffectiveStageActual(project.name, stB, sdB.actual);
+            return a - b;
+          });
+
+        for (const [stage, sd] of stagesInMonth) {
+          const sc       = STAGE_COLORS[stage] || STAGE_COLORS['EOI Panel'];
+          const effDate  = getEffectiveStageActual(project.name, stage, sd.actual);
+          const stageLbl = (stage === 'Funding Approval' && project.approvalAuthority)
+            ? `${stage} — ${project.approvalAuthority}`
+            : stage;
+          html += `<div class="tl-stage-marker"
+            style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+            <span class="tl-diamond">◆</span>
+            <span>${esc(stageLbl)}</span>
+            <span class="tl-stage-date">${fmtDateShort(effDate)}</span>
+          </div>`;
+        }
+
+        html += '</td>';
+      }
+
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    container.style.display = 'block';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // FILE READING
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1666,6 +1759,7 @@
     appState.allTasks = buildAllTasks(appState.projects, appState.taskDefs, false);
     saveState();
     renderTimeline();
+    renderCalendar();
     renderChecklist();
     renderOpenTasks();
     renderSummaryCards();
@@ -2021,6 +2115,7 @@
 
     // ── Render timeline, checklist, open tasks, summary cards & next-week panel ─
     renderTimeline();
+    renderCalendar();
     renderChecklist();
     renderOpenTasks();
     renderSummaryCards();
