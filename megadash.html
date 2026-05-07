@@ -437,6 +437,7 @@
     showActiveOnly:    true,   // start-date filter: true = hide tasks not yet started
     showNext3Weeks:    true,   // date-window filter: true = only show tasks due within 3 weeks
     pipelineRows:      [],     // raw rows from pipeline_data.xlsx "MK Pipeline" sheet (all projects)
+    calendarTeamFilter: null,  // null = all teams; Set of team names = specific selection
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1300,7 +1301,58 @@
       });
     }
 
-    let html = '<p class="section-label">Pipeline Calendar</p><div class="cal-wrap"><table class="cal-table"><thead><tr>';
+    // Derive unique, sorted impact teams from loaded projects
+    const allTeams = [...new Set(
+      appState.projects.map(p => (p.impactTeam || '').trim()).filter(Boolean)
+    )].sort();
+
+    const sel = appState.calendarTeamFilter; // null = all; Set = specific teams
+
+    // Summary label for the dropdown button
+    let btnLabel;
+    if (!sel || sel.size === allTeams.length) {
+      btnLabel = 'All teams';
+    } else if (sel.size <= 2) {
+      btnLabel = [...sel].join(', ');
+    } else {
+      btnLabel = `${sel.size} of ${allTeams.length} teams`;
+    }
+
+    // Filter bar HTML (only shown when there are recognised teams)
+    let filterHtml = '';
+    if (allTeams.length) {
+      const allChecked = !sel || sel.size === allTeams.length;
+      const teamOptions = allTeams.map(t =>
+        `<label class="cal-dd-item">
+          <input type="checkbox" class="cal-team-cb" value="${esc(t)}"${(!sel || sel.has(t)) ? ' checked' : ''}>
+          <span>${esc(t)}</span>
+        </label>`
+      ).join('');
+
+      filterHtml = `
+        <div class="cal-filter-bar">
+          <span class="cal-filter-label">Impact Team:</span>
+          <details class="cal-dropdown">
+            <summary class="cal-dropdown-btn">${esc(btnLabel)} ▾</summary>
+            <div class="cal-dropdown-panel">
+              <label class="cal-dd-item cal-dd-all-item">
+                <input type="checkbox" class="cal-dd-all"${allChecked ? ' checked' : ''}>
+                <span>All teams</span>
+              </label>
+              <div class="cal-dd-divider"></div>
+              ${teamOptions}
+            </div>
+          </details>
+        </div>`;
+    }
+
+    // Projects filtered by selected teams
+    const visibleProjects = getSortedProjects().filter(p =>
+      !sel || sel.has((p.impactTeam || '').trim())
+    );
+
+    let html = `<p class="section-label">4 Month Pipeline Outlook</p>${filterHtml}`;
+    html += '<div class="cal-wrap"><table class="cal-table"><thead><tr>';
     html += '<th class="tl-th-label">Project</th>';
     for (const m of months) {
       const isCur = m.year === today.getFullYear() && m.month === today.getMonth();
@@ -1308,13 +1360,12 @@
     }
     html += '</tr></thead><tbody>';
 
-    for (const project of getSortedProjects()) {
+    for (const project of visibleProjects) {
       const rc     = ROLE_COLORS[project.role] || ROLE_COLORS['Analyst'];
       const teamBg = IMPACT_TEAM_BG[(project.impactTeam || '').trim()];
 
       html += '<tr class="cal-row">';
 
-      // Sticky label cell — same structure as the timeline
       html += `<td class="tl-label"${teamBg ? ` style="background:${teamBg}"` : ''}>
         <div class="tl-label-inner">
           <span class="tl-project-name">${esc(project.name)}</span>
@@ -1331,7 +1382,6 @@
         const isCur = m.year === today.getFullYear() && m.month === today.getMonth();
         html += `<td class="cal-cell${isCur ? ' cal-cur-col' : ''}">`;
 
-        // Stages whose effective date lands in this month (Prescreen: Board only)
         const stagesInMonth = Object.entries(project.stageDates)
           .filter(([stage, sd]) => {
             if (!sd || !sd.actual) return false;
@@ -1368,6 +1418,35 @@
     html += '</tbody></table></div>';
     container.innerHTML = html;
     container.style.display = 'block';
+
+    // ── Filter dropdown wiring ────────────────────────────────────────────────
+    if (!allTeams.length) return;
+
+    const details = container.querySelector('.cal-dropdown');
+    const allCb   = container.querySelector('.cal-dd-all');
+    const teamCbs = [...container.querySelectorAll('.cal-team-cb')];
+
+    // "All teams" master checkbox — toggles every individual checkbox
+    allCb.addEventListener('change', () => {
+      teamCbs.forEach(cb => { cb.checked = allCb.checked; });
+    });
+
+    // Individual team checkboxes — keep master in sync
+    teamCbs.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checkedCount = teamCbs.filter(c => c.checked).length;
+        allCb.checked       = checkedCount === allTeams.length;
+        allCb.indeterminate = checkedCount > 0 && checkedCount < allTeams.length;
+      });
+    });
+
+    // Apply filter when dropdown closes
+    details.addEventListener('toggle', () => {
+      if (details.open) return;
+      const checked = teamCbs.filter(cb => cb.checked).map(cb => cb.value);
+      appState.calendarTeamFilter = checked.length === allTeams.length ? null : new Set(checked);
+      renderCalendar();
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -1033,3 +1033,63 @@
     }
     .cal-cell:last-child { border-right: none; }
     .cal-cell.cal-cur-col { background: #0c1c2e; }
+
+    /* Filter bar */
+    .cal-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .cal-filter-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Dropdown — built on <details>/<summary> */
+    .cal-dropdown { position: relative; display: inline-block; }
+    .cal-dropdown-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .cal-dropdown-btn::-webkit-details-marker { display: none; }
+    .cal-dropdown-btn:hover { border-color: #58a6ff; }
+    .cal-dropdown-panel {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 50;
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 6px 0;
+      min-width: 180px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .cal-dd-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 14px;
+      font-size: 0.78rem;
+      color: #e6edf3;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .cal-dd-item:hover { background: #2d333b; }
+    .cal-dd-all-item { font-weight: 600; }
+    .cal-dd-divider { border-top: 1px solid #30363d; margin: 4px 0; }
