@@ -1093,3 +1093,135 @@
     .cal-dd-item:hover { background: #2d333b; }
     .cal-dd-all-item { font-weight: 600; }
     .cal-dd-divider { border-top: 1px solid #30363d; margin: 4px 0; }
+
+    /* ══ Task Horizon ════════════════════════════════════════════════════════ */
+    #taskHorizon { margin-bottom: 24px; }
+    .th-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+    .th-table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+      background: #161b22;
+      table-layout: auto;
+    }
+
+    /* Column headers */
+    .th-row-header {
+      width: 200px;
+      min-width: 200px;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .th-day-hdr {
+      padding: 8px 8px;
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #8b949e;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      border-right: 1px solid #21262d;
+      white-space: nowrap;
+      min-width: 110px;
+    }
+    .th-day-hdr:last-child { border-right: none; }
+    .th-today-hdr { color: #58a6ff; background: #0d1f36; border-bottom: 2px solid #1f6feb; }
+    .th-past-hdr  { color: #484f58; }
+
+    /* Group header rows */
+    .th-group-hdr { background: #1c2128; }
+    .th-group-cell {
+      padding: 7px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #e6edf3;
+      border-bottom: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      background: #1c2128;
+    }
+    .th-toggle-btn {
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 0;
+      margin-right: 6px;
+      line-height: 1;
+    }
+
+    /* Person rows */
+    .th-person-row { background: #161b22; }
+    .th-person-cell {
+      padding: 5px 12px 5px 26px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: #8b949e;
+      border-bottom: 1px solid #21262d;
+      position: sticky;
+      left: 0;
+      background: #161b22;
+    }
+
+    /* Project data rows */
+    .th-proj-row { border-bottom: 1px solid #21262d; }
+    .th-proj-row:last-of-type { border-bottom: none; }
+    .th-proj-row:hover .th-proj-cell,
+    .th-proj-row:hover .th-day-cell      { background: #1c2128; }
+    .th-proj-row:hover .th-day-cell.th-today-col { background: #102030; }
+
+    .th-proj-cell {
+      padding: 6px 10px 6px 40px;
+      font-size: 0.75rem;
+      color: #c9d1d9;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      vertical-align: top;
+      min-width: 200px;
+      max-width: 200px;
+      word-break: break-word;
+    }
+    .th-day-cell {
+      padding: 5px 7px;
+      background: #161b22;
+      vertical-align: top;
+      border-right: 1px solid #21262d;
+    }
+    .th-day-cell:last-child { border-right: none; }
+    .th-day-cell.th-today-col { background: #0c1c2e; }
+    .th-day-cell.th-past-col  { opacity: 0.55; }
+
+    /* Task pills */
+    .th-task-pill {
+      display: block;
+      padding: 2px 7px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      font-size: 0.67rem;
+      color: #c9d1d9;
+      margin-bottom: 3px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .th-task-pill:last-child { margin-bottom: 0; }

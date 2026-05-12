@@ -105,6 +105,9 @@
   <!-- Timeline (hidden until data loads) -->
   <div id="timeline" style="display:none"></div>
 
+  <!-- Task Horizon (hidden until data loads) -->
+  <div id="taskHorizon" style="display:none"></div>
+
   <!-- Panels row: left checklist + right open tasks -->
   <div id="panels">
 
@@ -1450,6 +1453,170 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // TASK HORIZON
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderTaskHorizon() {
+    const container = document.getElementById('taskHorizon');
+    if (!appState.projects.length) { container.style.display = 'none'; return; }
+
+    // ── 1. Build 8 business-day columns: -2 biz days, today, +5 biz days ──────
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    function isBizDay(d) { const w = d.getDay(); return w !== 0 && w !== 6; }
+    function toDayKey(d) { return d.toISOString().split('T')[0]; }
+    function fmtDayHdr(d) {
+      return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    const pastDays = [];
+    let scan = addDays(today, -1);
+    while (pastDays.length < 2) { if (isBizDay(scan)) pastDays.unshift(new Date(scan)); scan = addDays(scan, -1); }
+
+    const futureDays = [];
+    scan = addDays(today, 1);
+    while (futureDays.length < 5) { if (isBizDay(scan)) futureDays.push(new Date(scan)); scan = addDays(scan, 1); }
+
+    const days    = [...pastDays, today, ...futureDays];
+    const todayKey = toDayKey(today);
+    const dayKeySet = new Set(days.map(toDayKey));
+
+    // ── 2. Helpers ─────────────────────────────────────────────────────────────
+    // Treat Analyst Assisting the same as Analyst throughout
+    function normRole(r) {
+      const s = (r || '').trim();
+      return s === 'Analyst Assisting' ? 'Analyst' : s;
+    }
+
+    // Look up a person's name from the raw pipeline rows for a given column
+    function getPersonForProject(projectName, col) {
+      const row = appState.pipelineRows.find(r =>
+        (r['Project: Project Name'] || '').trim() === projectName
+      );
+      if (!row) return null;
+      const nr = {};
+      for (const [k, v] of Object.entries(row)) nr[k.trim()] = v;
+      return (nr[col] || '').trim() || null;
+    }
+
+    // ── 3. Group tasks ──────────────────────────────────────────────────────────
+    // Structure: groupName → personName → projectName → dayKey → [task objects]
+    const GROUP_ORDER = ['My Tasks', 'Analyst Tasks', 'Manager Tasks'];
+    const groups = {};
+    for (const g of GROUP_ORDER) groups[g] = new Map();
+
+    function addToGroup(groupName, personName, projName, dayKey, task) {
+      const g = groups[groupName];
+      if (!g.has(personName)) g.set(personName, new Map());
+      const byProj = g.get(personName);
+      if (!byProj.has(projName)) byProj.set(projName, new Map());
+      const byDay = byProj.get(projName);
+      if (!byDay.has(dayKey)) byDay.set(dayKey, []);
+      byDay.get(dayKey).push(task);
+    }
+
+    // Combine project/custom tasks with routine occurrences; exclude ticked and concept tasks
+    const allVisible = [
+      ...appState.allTasks.filter(t => !appState.tickState[t.tickKey] && !t.isConcept),
+      ...buildRoutineOccurrences().filter(r => !appState.tickState[r.tickKey]),
+    ];
+
+    for (const t of allVisible) {
+      const due = t.isRoutine ? t.dueDate : getEffectiveDueDate(t);
+      if (!due) continue;
+      const dk = toDayKey(due);
+      if (!dayKeySet.has(dk)) continue;
+
+      if (t.isRoutine) {
+        addToGroup('My Tasks', MK_NAME, 'Routine Tasks', dk, t);
+        continue;
+      }
+
+      const taskRole = normRole(t.taskDef.role);
+      const projRole = normRole(t.projectRole);
+
+      if (taskRole === projRole) {
+        // My task on this project
+        addToGroup('My Tasks', MK_NAME, t.projectName, dk, t);
+      } else if (taskRole === 'Analyst' && projRole === 'Manager') {
+        const person = getPersonForProject(t.projectName, 'Investment Analyst') || 'Analyst';
+        addToGroup('Analyst Tasks', person, t.projectName, dk, t);
+      } else if (taskRole === 'Manager' && projRole === 'Analyst') {
+        const person = getPersonForProject(t.projectName, 'Investment Manager') || 'Manager';
+        addToGroup('Manager Tasks', person, t.projectName, dk, t);
+      }
+    }
+
+    // ── 4. Render ───────────────────────────────────────────────────────────────
+    let html = '<p class="section-label">Task Horizon</p>';
+    html += '<div class="th-wrap"><table class="th-table"><thead><tr>';
+    html += '<th class="th-row-header">Task / Project</th>';
+    for (const day of days) {
+      const dk      = toDayKey(day);
+      const isTod   = dk === todayKey;
+      const isPast  = dk < todayKey;
+      html += `<th class="th-day-hdr${isTod ? ' th-today-hdr' : ''}${isPast ? ' th-past-hdr' : ''}">${esc(fmtDayHdr(day))}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    let gIdx = 0;
+    for (const groupName of GROUP_ORDER) {
+      const personMap = groups[groupName];
+      if (!personMap.size) { gIdx++; continue; }
+
+      const gId = `thg${gIdx}`;
+      html += `<tr class="th-group-hdr">
+        <td class="th-group-cell" colspan="${days.length + 1}">
+          <button class="th-toggle-btn" data-group="${gId}">▾</button>
+          ${esc(groupName)}
+        </td>
+      </tr>`;
+
+      for (const [personName, projMap] of personMap) {
+        html += `<tr class="th-person-row th-rows-${gId}">
+          <td class="th-person-cell" colspan="${days.length + 1}">${esc(personName)}</td>
+        </tr>`;
+
+        for (const [projName, dayMap] of projMap) {
+          html += `<tr class="th-proj-row th-rows-${gId}">`;
+          html += `<td class="th-proj-cell">${esc(projName)}</td>`;
+
+          for (const day of days) {
+            const dk     = toDayKey(day);
+            const isTod  = dk === todayKey;
+            const isPast = dk < todayKey;
+            const tasks  = dayMap.get(dk) || [];
+            html += `<td class="th-day-cell${isTod ? ' th-today-col' : ''}${isPast ? ' th-past-col' : ''}">`;
+            for (const t of tasks) {
+              html += `<div class="th-task-pill">${esc(t.taskDef.label)}</div>`;
+            }
+            html += '</td>';
+          }
+
+          html += '</tr>';
+        }
+      }
+
+      gIdx++;
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    container.style.display = 'block';
+
+    // ── 5. Wire collapse / expand toggles ──────────────────────────────────────
+    container.querySelectorAll('.th-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const gId        = btn.dataset.group;
+        const rows       = container.querySelectorAll(`.th-rows-${gId}`);
+        const collapsing = btn.textContent.trim() === '▾';
+        btn.textContent  = collapsing ? '▸' : '▾';
+        rows.forEach(r => { r.style.display = collapsing ? 'none' : ''; });
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // FILE READING
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1839,6 +2006,7 @@
     saveState();
     renderTimeline();
     renderCalendar();
+    renderTaskHorizon();
     renderChecklist();
     renderOpenTasks();
     renderSummaryCards();
@@ -2195,6 +2363,7 @@
     // ── Render timeline, checklist, open tasks, summary cards & next-week panel ─
     renderTimeline();
     renderCalendar();
+    renderTaskHorizon();
     renderChecklist();
     renderOpenTasks();
     renderSummaryCards();
@@ -2560,6 +2729,7 @@
           .forEach(t => setTick(t.tickKey, newVal));
         renderChecklistTasks(project);
         renderOpenTasks();
+        renderTaskHorizon();
         renderTimeline();
         renderSummaryCards();
       });
@@ -2573,6 +2743,7 @@
         setTick(key, e.target.checked);
         renderChecklistTasks(project);
         renderOpenTasks();
+        renderTaskHorizon();
         renderTimeline();
         renderSummaryCards();
       });
@@ -2586,6 +2757,7 @@
         deleteCustomTask(key);
         renderChecklistTasks(project);
         renderOpenTasks();
+        renderTaskHorizon();
         renderTimeline();
         renderSummaryCards();
       });
@@ -2783,6 +2955,7 @@
         const project = e.target.dataset.project;
         setTick(key, true); // tick only from this panel
         renderOpenTasks();
+        renderTaskHorizon();
         renderTimeline();
         renderSummaryCards();
         if (project) {
@@ -2799,6 +2972,7 @@
         const project = e.target.dataset.project;
         deleteCustomTask(key);
         renderOpenTasks();
+        renderTaskHorizon();
         renderTimeline();
         renderSummaryCards();
         const sel = document.getElementById('projectSelect').value;
@@ -3066,6 +3240,7 @@
     setTick(key, true);
     renderNwwForPerson(personName);
     renderOpenTasks();
+    renderTaskHorizon();
     renderTimeline();
     renderSummaryCards();
     if (project) {
@@ -3183,6 +3358,7 @@
 
       saveState();
       renderOpenTasks();
+      renderTaskHorizon();
       renderTimeline();
       renderSummaryCards();
       const sel = document.getElementById('projectSelect').value;
