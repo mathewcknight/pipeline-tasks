@@ -1210,6 +1210,14 @@
     .th-day-cell:last-child { border-right: none; }
     .th-day-cell.th-today-col { background: #0c1c2e; }
     .th-day-cell.th-past-col  { opacity: 0.55; }
+    .th-day-cell.th-crunch-1,
+    .th-day-cell.th-today-col.th-crunch-1               { background: #523615; }
+    .th-day-cell.th-crunch-2,
+    .th-day-cell.th-today-col.th-crunch-2               { background: #6e4210; }
+    .th-proj-row:hover .th-day-cell.th-crunch-1,
+    .th-proj-row:hover .th-day-cell.th-today-col.th-crunch-1 { background: #604020; }
+    .th-proj-row:hover .th-day-cell.th-crunch-2,
+    .th-proj-row:hover .th-day-cell.th-today-col.th-crunch-2 { background: #7e4e18; }
 
     /* Task pills */
     .th-task-pill {
